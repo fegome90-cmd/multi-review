@@ -52,3 +52,15 @@ dmypy.json
 
 # Logs
 *.log
+
+# Coverage reports
+coverage.xml
+coverage.json
+htmlcov/
+
+# Internal documentation (not for public repo)
+docs/internal/
+*.backup
+
+# Development artifacts
+reports/*.json
