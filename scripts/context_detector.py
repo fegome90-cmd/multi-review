@@ -164,9 +164,6 @@ def _run_git_command(
         raise RuntimeError(
             f"{operation} failed: {e}"
         )
-    except RuntimeError:
-        # Re-raise RuntimeError already raised above
-        raise
     # Don't catch Exception here - let specific errors propagate
 
 
