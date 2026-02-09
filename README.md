@@ -2,19 +2,15 @@
 
 Multi-agent code review orchestration with smart agent selection for Claude Code.
 
-> **⚠️ IMPORTANT:** See [DEPENDENCIES.md](DEPENDENCIES.md) for required plugins and licensing information.
-
 ## Overview
 
 `multi-review` is a standalone plugin that orchestrates code review agents from multiple plugins:
 
 - **feature-dev** (Official Anthropic) - General code review with confidence scoring
 - **pr-review-toolkit** (Official Anthropic) - Specialized PR review agents (7 agents)
-- **superpowers** (⚠️ Third-party, NOT open source) - Framework-specific review guidance
+- **superpowers** (✅ MIT Licensed) - Framework-specific review guidance
 
-**⚠️ Legal Notice:** The `framework` preset requires `superpowers`, which is NOT open source. Use `quick`, `thorough`, or `comprehensive` presets for official plugins only.
-
-See [DEPENDENCIES.md](DEPENDENCIES.md) for complete dependency information.
+See [DEPENDENCIES.md](DEPENDENCIES.md) for complete dependency and licensing information.
 
 ## Migration Notice
 
@@ -60,14 +56,14 @@ This plugin was migrated from `cm-multi-review` (previously part of `context-mem
 
 ## Presets
 
-| Preset | Agents | Use Case | Plugins Required |
-|--------|--------|----------|------------------|
-| quick | 1-2 | Fast check before commit | Official only ✅ |
-| thorough | 4 | Balanced review | Official only ✅ |
-| comprehensive | 7 | Complete review before PR | Official only ✅ |
-| framework | 1-2 | Framework-specific compliance | ⚠️ **Requires superpowers (NOT open source)** |
+| Preset | Agents | Use Case |
+|--------|--------|----------|
+| quick | 1-2 | Fast check before commit |
+| thorough | 4 | Balanced review |
+| comprehensive | 7 | Complete review before PR |
+| framework | 1-2 | Framework-specific compliance |
 
-**⚠️ WARNING:** `framework` preset requires `superpowers` plugin which is NOT open source. See [DEPENDENCIES.md](DEPENDENCIES.md) for details.
+**All presets use open-source plugins!** See [DEPENDENCIES.md](DEPENDENCIES.md) for details.
 
 ## Context Detection
 

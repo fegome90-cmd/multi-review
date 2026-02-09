@@ -22,17 +22,20 @@ SOFTWARE.
 
 ---
 
-IMPORTANT NOTICE:
+## Attribution
 
 This plugin ("multi-review") orchestrates agents from external plugins.
-This license applies ONLY to the multi-review plugin code itself.
 
-External plugins that multi-review depends on may have their own licensing terms:
+### Official Anthropic Plugins
+- **feature-dev** - General code review agent
+- **pr-review-toolkit** - Specialized PR review agents
 
-- feature-dev, pr-review-toolkit: Official Anthropic plugins (included with Claude Code)
-- superpowers: Third-party plugin (NOT open source)
+These plugins are included with Claude Code by default.
 
-Users are responsible for ensuring they have rights to use all required plugins
-and for complying with each plugin's individual licensing terms.
+### Third-Party Open Source Plugins
+- **superpowers** (MIT License, Copyright (c) 2025 Jesse Vincent)
+  - Repository: https://github.com/obra/superpowers-marketplace
+  - Licensed under MIT License
+  - See: https://github.com/obra/superpowers-marketplace/blob/main/LICENSE
 
-See DEPENDENCIES.md for complete information on required plugins.
+See DEPENDENCIES.md for complete information on all required plugins and their licenses.

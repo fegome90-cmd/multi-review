@@ -13,19 +13,18 @@ External plugins required for `multi-review` to function.
 
 **Installation:** These are included with Claude Code by default. No additional installation needed.
 
-### Optional Third-Party Plugins
+### Optional Plugins
 
-| Plugin | Agents Used | Status | Notes |
-|--------|-------------|--------|-------|
-| **superpowers** | `superpowers:code-review-checklist` | ⚠️ **NOT OPEN SOURCE** | Framework-specific review guidance |
+| Plugin | Agents Used | Status | Source |
+|--------|-------------|--------|--------|
+| **superpowers** | `superpowers:code-review-checklist` | ✅ **MIT Licensed** | obra/superpowers-marketplace |
 
-**IMPORTANT - Legal Notice:**
-- `superpowers` is **NOT open source** software
-- Using agents from this plugin may have licensing implications
-- The `framework` preset requires this plugin (optional feature)
-- All other presets work WITHOUT superpowers
+**superpowers Marketplace:**
+- **Repository:** https://github.com/obra/superpowers-marketplace
+- **License:** MIT License (Copyright (c) 2025 Jesse Vincent)
+- **Installation:** `/plugin marketplace add obra/superpowers-marketplace`
 
-**Recommendation:** Use `quick`, `thorough`, or `comprehensive` presets to avoid superpowers dependency.
+> **Note:** Individual plugins within superpowers may have different licenses. See respective plugin documentation.
 
 ## Agent Breakdown by Plugin
 
@@ -44,75 +43,72 @@ pr-review-toolkit:comment-analyzer      - Documentation accuracy
 pr-review-toolkit:code-simplifier       - Refactoring suggestions
 ```
 
-### superpowers Plugin (⚠️ NOT OPEN SOURCE)
+### superpowers Plugin (MIT Licensed)
 ```
 superpowers:code-review-checklist - Framework-specific review guidance
 ```
 
 ## Preset Dependency Matrix
 
-| Preset | feature-dev | pr-review-toolkit | superpowers | Legal Status |
-|--------|-------------|------------------|-------------|--------------|
-| **quick** | ✅ Required | ✅ Required | ❌ Not used | ✅ Safe (official plugins only) |
-| **thorough** | ✅ Required | ✅ Required | ❌ Not used | ✅ Safe (official plugins only) |
-| **comprehensive** | ✅ Required | ✅ Required | ❌ Not used | ✅ Safe (official plugins only) |
-| **framework** | ❌ Not used | ✅ Required | ✅ Required | ⚠️ **Requires superpowers** |
+| Preset | feature-dev | pr-review-toolkit | superpowers | All Plugins Open Source |
+|--------|-------------|------------------|-------------|-------------------------|
+| **quick** | ✅ Required | ✅ Required | ❌ Not used | ✅ Yes |
+| **thorough** | ✅ Required | ✅ Required | ❌ Not used | ✅ Yes |
+| **comprehensive** | ✅ Required | ✅ Required | ❌ Not used | ✅ Yes |
+| **framework** | ❌ Not used | ✅ Required | ✅ Required | ✅ Yes (MIT) |
 
-## Troubleshooting
+**All presets now use open-source plugins only!** ✅
 
-### "Agent not found" Error
+## Installation
 
-**Cause:** Required plugin not installed.
+### Install superpowers Marketplace (for framework preset)
 
-**Solution:**
+```bash
+# Add the marketplace
+/plugin marketplace add obra/superpowers-marketplace
+
+# Install the core superpowers plugin
+/plugin install superpowers@superpowers-marketplace
+```
+
+### Verify Installation
+
 ```bash
 # Check installed plugins
 /plugin list
 
-# Install official plugins (should be pre-installed)
-/plugin install feature-dev
-/plugin install pr-review-toolkit
-
-# For framework preset only:
-# WARNING: superpowers is NOT open source
-# Install at your own legal risk
-/plugin install superpowers
+# Verify superpowers agents available
+/multi-review --list-agents | grep superpowers
 ```
 
-### Use Without superpowers
+## Agent Sources and Licenses
 
-**Recommended:** Avoid the `framework` preset. Use `quick`, `thorough`, or `comprehensive` instead:
-
-```bash
-# Safe - uses official plugins only
-/multi-review --agents quick
-/multi-review --agents thorough
-/multi-review --agents comprehensive
-
-# Avoid - requires non-open-source plugin
-# /multi-review --agents framework
-```
-
-## Legal Notice
-
-This plugin (`multi-review`) is released under the MIT License (see LICENSE file).
-
-However, **this plugin orchestrates agents from other plugins** which may have their own licensing terms:
-
-- **feature-dev** and **pr-review-toolkit** are official Anthropic plugins included with Claude Code
-- **superpowers** is a third-party plugin that is **NOT open source**
-
-**Users are responsible for:**
-1. Ensuring they have rights to use all required plugins
-2. Complying with each plugin's licensing terms
-3. Understanding that `framework` preset requires superpowers (non-open-source)
-
-**No warranty:** This plugin is provided "as is" without warranty of any kind.
+| Plugin | Source | License | Repository |
+|--------|--------|----------|------------|
+| feature-dev | Official Anthropic | Included with Claude Code | Built-in |
+| pr-review-toolkit | Official Anthropic | Included with Claude Code | Built-in |
+| superpowers | obra/superpowers-marketplace | MIT License | https://github.com/obra/superpowers-marketplace |
 
 ## Attribution
 
 This plugin uses agents from:
-- **Anthropic** - feature-dev, pr-review-toolkit (official plugins)
-- **Third-party** - superpowers (optional, NOT open source)
 
-See each plugin's documentation for their specific licensing terms.
+### Official Anthropic Plugins
+- **feature-dev** - General code review
+- **pr-review-toolkit** - Specialized PR review agents
+
+### Third-Party Open Source Plugins
+- **superpowers** (MIT License)
+  - Copyright (c) 2025 Jesse Vincent
+  - Repository: https://github.com/obra/superpowers-marketplace
+  - Licensed under MIT License - see https://github.com/obra/superpowers-marketplace/blob/main/LICENSE
+
+## License
+
+This plugin (`multi-review`) is released under the MIT License (see LICENSE file).
+
+All required dependencies are either:
+1. Official Anthropic plugins (included with Claude Code), or
+2. Open source plugins with permissive licenses (MIT)
+
+See each plugin's repository for their specific licensing terms.
