@@ -22,12 +22,11 @@ import json
 import logging
 import subprocess
 import sys
-from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 # Import shared utilities and exit codes
-from utils import ExitCodes
+from utils import ExitCodes, save_report
 
 # Configure logging
 logging.basicConfig(
@@ -145,25 +144,12 @@ def save_session_report(results: Dict[str, Any], files: List[Path]) -> Optional[
     Returns:
         Path to saved report, or None if save failed.
     """
-    reports_dir = Path(__file__).parent.parent / "reports"
-    reports_dir.mkdir(exist_ok=True)
-
-    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    report_file = reports_dir / f"session_{timestamp}.json"
-
     report_data = {
-        "timestamp": timestamp,
         "session_type": "end",
         "files": [str(f) for f in files],
         "results": results,
     }
-
-    try:
-        report_file.write_text(json.dumps(report_data, indent=2))
-        return report_file
-    except Exception as e:
-        logger.error(f"Failed to save report: {e}")
-        return None
+    return save_report(report_data, "session")
 
 
 def main() -> int:
