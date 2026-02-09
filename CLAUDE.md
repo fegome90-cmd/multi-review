@@ -7,52 +7,23 @@ Guidance for Claude Code when working on the `multi-review` plugin.
 ## Quick Start
 
 ```bash
-# Install locally for development
+# Install locally
 /plugin marketplace add ~/.claude/plugins/multi-review
 /plugin install multi-review@local
 
-# Run review on current directory
+# Run review
 /multi-review
-
-# Run with specific preset
-/multi-review --agents thorough
 ```
 
 ---
 
-## Plugin Architecture
+## Architecture Overview
 
-`multi-review` is a multi-agent code review orchestration plugin that coordinates agents from multiple plugins:
+**Multi-agent orchestration plugin** that coordinates code review agents from multiple plugins (feature-dev, pr-review-toolkit, superpowers).
 
-- **feature-dev** - General code review
-- **pr-review-toolkit** - Specialized PR review (7 agents)
-- **superpowers** - Framework-specific guidance
+**Workflow:** Detect context → Suggest preset → Launch agents → Aggregate results → Offer next actions
 
-**Components:**
-- `commands/multi-review.md` - Main slash command
-- `scripts/context_detector.py` - Git-based context detection
-- `scripts/auto_review.py` - Post-Write hook handler
-- `scripts/pre_commit_check.py` - Pre-Commit hook handler
-- `scripts/session_review.py` - Session-End hook handler
-- `hooks/*.sh` - Bash wrapper scripts
-- `resources/` - Documentation and reference
-
-**Workflow:**
-1. Command detects context using git/gh CLI
-2. Suggests preset based on change size + file types
-3. Launches agents in parallel via Task tool
-4. Aggregates results by severity + confidence
-5. Offers next actions (apply fixes, plan, debug, stop)
-
----
-
-## Development Workflow
-
-1. **Edit component** - Modify command/script/resource files
-2. **Uninstall** - `/plugin uninstall multi-review@local`
-3. **Reinstall** - `/plugin install multi-review@local`
-4. **Test** - `/multi-review` in a target project
-5. **Restart** - Restart Claude Code if command schema changes
+See `README.md` for complete documentation.
 
 ---
 
@@ -61,99 +32,92 @@ Guidance for Claude Code when working on the `multi-review` plugin.
 These rules must ALWAYS hold:
 
 1. **Zero external dependencies** - Scripts use only Python stdlib
-2. **Stdlib logging only** - No infrastructure.logging (from context-memory)
-3. **Backward compatibility** - `/cm-multi-review` must still work (with deprecation warning)
+2. **Stdlib logging only** - No infrastructure.logging
+3. **Backward compatibility** - `/cm-multi-review` still works (with deprecation warning)
 4. **Hooks disabled by default** - Users must opt-in via settings.json
 5. **Agent orchestration only** - Plugin does NOT create its own review agents
-6. **Git-based detection** - Uses git/gh CLI for context (no LSP dependency in MVP)
+6. **Git-based detection** - Uses git/gh CLI (no LSP dependency in MVP)
 
 ---
 
-## Component Format
+## Development Workflow
+
+1. **Edit component** - Modify command/script/resource files
+2. **Uninstall** - `/plugin uninstall multi-review@local`
+3. **Reinstall** - `/plugin install multi-review@local`
+4. **Test** - `/multi-review` in target project
+5. **Restart** - Claude Code if command schema changes
+
+---
+
+## Component Guidelines
 
 ### Command Frontmatter (`commands/*.md`)
-```yaml
----
-description: Brief description
-argument-hint: [--flag=value]
-allowed-tools: ["Tool", "AnotherTool"]
----
-```
+See `resources/command-format.md` for specification.
 
 ### Hooks (`.claude-plugin/hooks.json`)
-```json
-{
-  "hooks": {
-    "PostToolUse": [{
-      "matcher": "Write|Edit",
-      "hooks": [{
-        "type": "command",
-        "command": "bash ${CLAUDE_PLUGIN_ROOT}/hooks/post-write.sh",
-        "enabled": false
-      }]
-    }],
-    "PreCommit": [{
-      "hooks": [{
-        "type": "command",
-        "command": "python3 ${CLAUDE_PLUGIN_ROOT}/scripts/pre_commit_check.py",
-        "enabled": false
-      }]
-    }],
-    "Stop": [{
-      "hooks": [{
-        "type": "command",
-        "command": "python3 ${CLAUDE_PLUGIN_ROOT}/scripts/session_review.py",
-        "enabled": false
-      }]
-    }]
-  }
-}
-```
-
----
-
-## Script Guidelines
+See `resources/hook-format.md` for specification.
 
 ### Python Scripts
+- Use `logging.basicConfig(level=logging.INFO)` - stdlib only
+- Exit codes: 0=success, 1=issues, 2=error
+- Comprehensive try/except with actionable messages
 
-- **Use stdlib logging:** `logging.basicConfig(level=logging.INFO)`
-- **No external dependencies:** Only Python 3.10+ stdlib
-- **Exit codes:** 0=success, 1=issues, 2=error
-- **Error handling:** Comprehensive try/except with actionable messages
+#### scripts/utils.py
+
+Shared utility module providing common functionality across all hook scripts. This module eliminates code duplication and ensures consistent behavior.
+
+**ExitCodes Class**
+
+Canonical exit code constants for all scripts:
+- `ExitCodes.SUCCESS` (0): Normal successful execution
+- `ExitCodes.FAILURE` (1): General failure or issues found
+- `ExitCodes.INVALID_ARGS` (2): Invalid command-line arguments
+- `ExitCodes.CONFIG_ERROR` (3): Configuration or setup error
+
+Legacy constants (deprecated, use ExitCodes class instead):
+- `EXIT_SUCCESS`, `EXIT_ISSUES_FOUND`, `EXIT_ERROR`, `EXIT_TYPE_ERRORS`
+
+**Core Functions**
+
+- `save_report(report_data, report_type, prefix="review")` - Save report to reports directory as JSON. Returns Path or None on failure.
+- `get_reports_dir()` - Get/create the reports directory. Returns Path.
+- `generate_timestamp()` - Generate timestamp for filenames (YYYYMMDD-HHMMSS format).
+- `format_report_summary(preset, agents, issues_found, critical_count)` - Format standard report summary dictionary.
+- `log_review_summary(preset, agents, issues_found, report_path)` - Log standardized review summary.
+- `validate_file_path(file_path)` - Validate file exists and is readable. Returns bool.
+- `count_lines_safely(file_path)` - Count lines with comprehensive error handling (PermissionError, UnicodeDecodeError, OSError).
+
+**Usage Example**
+
+```python
+from scripts.utils import ExitCodes, save_report, log_review_summary
+
+# Save report
+report_data = {"results": [], "summary": {...}}
+path = save_report(report_data, "commit")
+if path:
+    log_review_summary("standard", ["code-reviewer"], 5, path)
+
+# Exit with proper code
+sys.exit(ExitCodes.SUCCESS)
+```
+
+See `docs/SCRIPTS_REFERENCE.md` for complete API.
 
 ### Bash Wrappers
-
-- **Set strict mode:** `set -euo pipefail`
-- **Find plugin root:** `PLUGIN_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"`
-- **Pass through exit codes:** `exit $exit_code`
-
----
-
-## Resources Reference
-
-| Resource | Purpose |
-|---|---|
-| `agent-catalog.md` | Available agents documentation |
-| `preset-definitions.md` | Preset configurations |
-| `context-detection.md` | Detection logic documentation |
+- Set `set -euo pipefail`
+- Find plugin root: `PLUGIN_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"`
+- Pass through exit codes: `exit $exit_code`
 
 ---
 
-## Migration from cm-multi-review
+## Source of Truth
 
-**Changes:**
-1. Command renamed: `/cm-multi-review` → `/multi-review`
-2. Plugin standalone (no longer part of context-memory)
-3. Scripts use stdlib logging (not infrastructure.logging)
-4. Hooks disabled by default
-
-**Compatibility:**
-- Original `/cm-multi-review` still works (shows deprecation warning)
-- Update context-memory to add deprecation notice to original command
-
----
-
-## Additional Context
-
-- `README.md` - Complete plugin documentation
-- `reports/` - Historical review reports
+- **README.md** - Complete plugin documentation
+- **DEPENDENCIES.md** - Required plugins and licensing (⚠️ IMPORTANT)
+- **docs/CONTRIB.md** - Development workflow and testing
+- **docs/RUNBOOK.md** - Deployment and troubleshooting
+- **docs/SCRIPTS_REFERENCE.md** - Complete scripts API
+- **resources/agent-catalog.md** - Available agents
+- **resources/preset-definitions.md** - Preset configurations

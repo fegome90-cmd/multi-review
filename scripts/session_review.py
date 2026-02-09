@@ -22,12 +22,11 @@ import json
 import logging
 import subprocess
 import sys
-from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 # Import shared utilities and exit codes
-from utils import ExitCodes
+from utils import ExitCodes, save_report
 
 # Configure logging
 logging.basicConfig(
@@ -75,7 +74,42 @@ def get_session_files(context_file: Optional[Path] = None) -> List[Path]:
     return []
 
 
-def run_session_review(files: List[Path]) -> Dict:
+def detect_session_context(files: List[Path]) -> Dict[str, Any]:
+    """Detect session context from file list.
+
+    Args:
+        files: List of files in session.
+
+    Returns:
+        Context dict with file counts, types, and line counts.
+    """
+    total_files = len(files)
+    python_files = sum(1 for f in files if f.suffix == ".py")
+
+    # Calculate total lines
+    total_lines = 0
+    for file in files:
+        try:
+            total_lines += len(file.read_text().splitlines())
+        except Exception:
+            # Skip files that can't be read
+            pass
+
+    # Detect file types
+    file_types = {}
+    for file in files:
+        ext = file.suffix
+        file_types[ext] = file_types.get(ext, 0) + 1
+
+    return {
+        "total_files": total_files,
+        "python_files": python_files,
+        "total_lines": total_lines,
+        "file_types": file_types,
+    }
+
+
+def run_session_review(files: List[Path], preset: str = "quick") -> Dict:
     """Run comprehensive session review.
 
     Args:
@@ -145,25 +179,12 @@ def save_session_report(results: Dict[str, Any], files: List[Path]) -> Optional[
     Returns:
         Path to saved report, or None if save failed.
     """
-    reports_dir = Path(__file__).parent.parent / "reports"
-    reports_dir.mkdir(exist_ok=True)
-
-    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    report_file = reports_dir / f"session_{timestamp}.json"
-
     report_data = {
-        "timestamp": timestamp,
         "session_type": "end",
         "files": [str(f) for f in files],
         "results": results,
     }
-
-    try:
-        report_file.write_text(json.dumps(report_data, indent=2))
-        return report_file
-    except Exception as e:
-        logger.error(f"Failed to save report: {e}")
-        return None
+    return save_report(report_data, "session")
 
 
 def main() -> int:

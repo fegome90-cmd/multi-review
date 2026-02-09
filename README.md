@@ -6,9 +6,11 @@ Multi-agent code review orchestration with smart agent selection for Claude Code
 
 `multi-review` is a standalone plugin that orchestrates code review agents from multiple plugins:
 
-- **feature-dev** - General code review with confidence scoring
-- **pr-review-toolkit** - Specialized PR review agents (7 agents)
-- **superpowers** - Framework-specific review guidance
+- **feature-dev** (Official Anthropic) - General code review with confidence scoring
+- **pr-review-toolkit** (Official Anthropic) - Specialized PR review agents (7 agents)
+- **superpowers** (✅ MIT Licensed) - Framework-specific review guidance
+
+See [DEPENDENCIES.md](DEPENDENCIES.md) for complete dependency and licensing information.
 
 
 ## Installation
@@ -49,6 +51,8 @@ Multi-agent code review orchestration with smart agent selection for Claude Code
 | thorough | 4 | Balanced review |
 | comprehensive | 7 | Complete review before PR |
 | framework | 1-2 | Framework-specific compliance |
+
+**All presets use open-source plugins!** See [DEPENDENCIES.md](DEPENDENCIES.md) for details.
 
 ## Context Detection
 
@@ -191,7 +195,9 @@ multi-review/
 
 ## License
 
-MIT
+MIT - See [LICENSE](LICENSE) file.
+
+**Important:** This plugin orchestrates agents from external plugins with their own licensing terms. See [DEPENDENCIES.md](DEPENDENCIES.md) for details.
 
 ## Author
 

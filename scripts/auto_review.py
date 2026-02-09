@@ -9,7 +9,7 @@ Usage (via hook):
     Triggered automatically after Write/Edit operations.
 
 Usage (standalone):
-    python3 auto_review.py [--file PATH] [--silent]
+    python3 auto_review.py [--file PATH] [--preset PRESET] [--silent]
 
 Exit codes:
     0: No issues found
@@ -33,6 +33,7 @@ from utils import (
     EXIT_ISSUES_FOUND,
     EXIT_ERROR,
     EXIT_TYPE_ERRORS,
+    ExitCodes,
     count_lines_safely,
     format_report_summary,
     log_review_summary,
@@ -48,6 +49,65 @@ logging.basicConfig(
     format='[%(levelname)s] %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# CONSTANTS
+# =============================================================================
+
+# Valid preset names for validation
+VALID_PRESETS: frozenset[str] = frozenset(["quick", "thorough", "comprehensive", "framework"])
+
+
+# =============================================================================
+# VALIDATION FUNCTIONS
+# =============================================================================
+
+def validate_preset(preset: Optional[str]) -> None:
+    """Validate that preset name is valid.
+
+    Args:
+        preset: Preset name to validate.
+
+    Raises:
+        ValueError: If preset is None, empty, or not a valid preset name.
+        TypeError: If preset is not a string or None.
+
+    Example:
+        >>> validate_preset("quick")  # OK
+        >>> validate_preset("invalid")  # Raises ValueError
+    """
+    if preset is None:
+        raise ValueError(
+            f"Invalid preset: None. Preset cannot be None. "
+            f"Valid presets are: {', '.join(sorted(VALID_PRESETS))}"
+        )
+
+    if not isinstance(preset, str):
+        raise TypeError(
+            f"Preset must be a string or None, got {type(preset).__name__}"
+        )
+
+    # Check for empty string
+    if not preset:
+        raise ValueError(
+            f"Invalid preset: empty string. "
+            f"Valid presets are: {', '.join(sorted(VALID_PRESETS))}"
+        )
+
+    # Check for whitespace (leading/trailing)
+    if preset != preset.strip():
+        raise ValueError(
+            f"Invalid preset: '{preset}' (has leading/trailing whitespace). "
+            f"Valid presets are: {', '.join(sorted(VALID_PRESETS))}"
+        )
+
+    # Validate against valid presets
+    if preset not in VALID_PRESETS:
+        valid_list = ', '.join(sorted(VALID_PRESETS))
+        raise ValueError(
+            f"Invalid preset: '{preset}'. Valid presets are: {valid_list}"
+        )
 
 
 def detect_review_context(file_path: Optional[Path] = None) -> Dict[str, Any]:
@@ -123,28 +183,38 @@ def should_skip_review(context: Dict[str, Any]) -> tuple[bool, str]:
     return False, ""
 
 
-def run_review_agents(context: Dict[str, Any], silent: bool = False) -> Dict[str, Any]:
+def run_review_agents(
+    context: Dict[str, Any],
+    silent: bool = False,
+    preset: Optional[str] = None
+) -> Dict[str, Any]:
     """Run appropriate review agents based on context.
 
     Args:
         context: Review context from detect_review_context().
         silent: If True, output JSON only (for CI/automation).
+        preset: Optional preset name to override auto-selection.
 
     Returns:
         Review results dict with issues_found, critical_count, etc.
     """
-    # Determine preset based on context
-    if context.get("line_count", 0) < 50:
-        preset = "quick"
-    elif context.get("line_count", 0) > 500:
-        preset = "comprehensive"
-    else:
-        preset = "thorough"
+    # Determine preset based on context or use provided preset
+    if preset is None:
+        # Auto-select preset based on context
+        if context.get("line_count", 0) < 50:
+            preset = "quick"
+        elif context.get("line_count", 0) > 500:
+            preset = "comprehensive"
+        else:
+            preset = "thorough"
 
-    if context.get("has_tests"):
-        preset = "thorough"
-    if context.get("has_types"):
-        preset = "comprehensive"
+        if context.get("has_tests"):
+            preset = "thorough"
+        if context.get("has_types"):
+            preset = "comprehensive"
+    else:
+        # Use the provided preset (already validated by caller)
+        pass
 
     if not silent:
         logger.info(f"Running multi-review with preset: {preset}")
@@ -224,12 +294,27 @@ def main() -> int:
         help="Path to file being reviewed (from hook)",
     )
     parser.add_argument(
+        "--preset",
+        type=str,
+        default=None,
+        help="Review preset to use (overrides auto-selection). "
+             f"Valid presets: {', '.join(sorted(VALID_PRESETS))}",
+    )
+    parser.add_argument(
         "--silent",
         action="store_true",
         help="Output JSON only, no human-readable messages",
     )
 
     args = parser.parse_args()
+
+    # Validate preset if provided
+    if args.preset is not None:
+        try:
+            validate_preset(args.preset)
+        except (ValueError, TypeError) as e:
+            logger.error(str(e))
+            return ExitCodes.INVALID_ARGS
 
     # Detect context
     context = detect_review_context(args.file)
@@ -244,7 +329,7 @@ def main() -> int:
         logger.info(f"Running auto-review for: {context['file_path']}")
 
     # Run review
-    results = run_review_agents(context, silent=args.silent)
+    results = run_review_agents(context, silent=args.silent, preset=args.preset)
 
     if not results.get("success"):
         if args.silent:

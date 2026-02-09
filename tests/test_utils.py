@@ -1,6 +1,7 @@
 """Tests for utils.py module."""
 
 import json
+import logging
 import pytest
 from pathlib import Path
 
@@ -230,3 +231,63 @@ class TestCountLinesSafely:
         assert count == 0
         # Should log a warning about encoding
         assert any("encoding" in record.message.lower() for record in caplog.records)
+
+    def test_count_lines_handles_os_error(self, tmp_path, caplog):
+        """Should handle OS errors (I/O errors) gracefully."""
+        # Create a mock file that will raise OSError on read
+        bad_file = tmp_path / "io_error.txt"
+        bad_file.write_text("test")
+
+        # Mock read_text to raise OSError
+        import unittest.mock as mock
+        with mock.patch.object(Path, 'read_text', side_effect=OSError("I/O error")):
+            count = count_lines_safely(bad_file)
+            assert count == 0
+            # Should log a warning about I/O error
+            assert any("i/o error" in record.message.lower() for record in caplog.records)
+
+
+class TestLogReviewSummary:
+    """Tests for review summary logging."""
+
+    def test_log_review_summary_with_issues(self, caplog):
+        """Should log warning when issues are found."""
+        with caplog.at_level(logging.INFO):
+            log_review_summary("quick", ["agent1", "agent2"], issues_found=5)
+
+        assert "Preset: quick" in caplog.text
+        assert "Agents: agent1, agent2" in caplog.text
+        assert "Issues found: 5" in caplog.text
+
+    def test_log_review_summary_without_issues(self, caplog):
+        """Should log info when no issues found."""
+        with caplog.at_level(logging.INFO):
+            log_review_summary("thorough", ["agent1"], issues_found=0)
+
+        assert "Preset: thorough" in caplog.text
+        assert "Agents: agent1" in caplog.text
+        assert "No issues found" in caplog.text
+
+    def test_log_review_summary_with_report_path(self, caplog):
+        """Should include report path when provided."""
+        report_path = Path("/path/to/report.json")
+        with caplog.at_level(logging.INFO):
+            log_review_summary("comprehensive", ["agent1", "agent2"], issues_found=0, report_path=report_path)
+
+        assert "Report saved:" in caplog.text
+        assert str(report_path) in caplog.text
+
+
+class TestValidateFilePathOSError:
+    """Tests for OSError handling in validate_file_path."""
+
+    def test_validate_file_path_handles_os_error(self, tmp_path, caplog):
+        """Should handle OSError gracefully when checking file."""
+        # Create a file and mock exists() to raise OSError
+        test_file = tmp_path / "test.txt"
+        test_file.write_text("test")
+
+        import unittest.mock as mock
+        with mock.patch.object(Path, 'exists', side_effect=OSError("System error")):
+            result = validate_file_path(test_file)
+            assert result is False
