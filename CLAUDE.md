@@ -63,6 +63,46 @@ See `resources/hook-format.md` for specification.
 - Exit codes: 0=success, 1=issues, 2=error
 - Comprehensive try/except with actionable messages
 
+#### scripts/utils.py
+
+Shared utility module providing common functionality across all hook scripts. This module eliminates code duplication and ensures consistent behavior.
+
+**ExitCodes Class**
+
+Canonical exit code constants for all scripts:
+- `ExitCodes.SUCCESS` (0): Normal successful execution
+- `ExitCodes.FAILURE` (1): General failure or issues found
+- `ExitCodes.INVALID_ARGS` (2): Invalid command-line arguments
+- `ExitCodes.CONFIG_ERROR` (3): Configuration or setup error
+
+Legacy constants (deprecated, use ExitCodes class instead):
+- `EXIT_SUCCESS`, `EXIT_ISSUES_FOUND`, `EXIT_ERROR`, `EXIT_TYPE_ERRORS`
+
+**Core Functions**
+
+- `save_report(report_data, report_type, prefix="review")` - Save report to reports directory as JSON. Returns Path or None on failure.
+- `get_reports_dir()` - Get/create the reports directory. Returns Path.
+- `generate_timestamp()` - Generate timestamp for filenames (YYYYMMDD-HHMMSS format).
+- `format_report_summary(preset, agents, issues_found, critical_count)` - Format standard report summary dictionary.
+- `log_review_summary(preset, agents, issues_found, report_path)` - Log standardized review summary.
+- `validate_file_path(file_path)` - Validate file exists and is readable. Returns bool.
+- `count_lines_safely(file_path)` - Count lines with comprehensive error handling (PermissionError, UnicodeDecodeError, OSError).
+
+**Usage Example**
+
+```python
+from scripts.utils import ExitCodes, save_report, log_review_summary
+
+# Save report
+report_data = {"results": [], "summary": {...}}
+path = save_report(report_data, "commit")
+if path:
+    log_review_summary("standard", ["code-reviewer"], 5, path)
+
+# Exit with proper code
+sys.exit(ExitCodes.SUCCESS)
+```
+
 See `docs/SCRIPTS_REFERENCE.md` for complete API.
 
 ### Bash Wrappers
