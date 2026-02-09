@@ -1,0 +1,11 @@
+{
+  "name": "multi-review",
+  "version": "1.0.0",
+  "description": "Multi-agent code review orchestration with smart agent selection. Detects repository context, suggests appropriate review agents, and runs parallel code reviews using feature-dev, pr-review-toolkit, and superpowers.",
+  "author": {
+    "name": "Felipe Gonzalez",
+    "email": "fegome.90@gmail.com"
+  },
+  "license": "MIT",
+  "keywords": ["code-review", "multi-agent", "orchestration", "testing", "quality"]
+}

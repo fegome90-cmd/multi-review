@@ -1,0 +1,11 @@
+{
+  "name": "multi-review",
+  "owner": {
+    "name": "Felipe Gonzalez",
+    "username": "felipe-gonzalez"
+  },
+  "plugins": [{
+    "name": "multi-review",
+    "source": "./"
+  }]
+}
