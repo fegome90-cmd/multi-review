@@ -10,17 +10,6 @@ Multi-agent code review orchestration with smart agent selection for Claude Code
 - **pr-review-toolkit** - Specialized PR review agents (7 agents)
 - **superpowers** - Framework-specific review guidance
 
-## Migration Notice
-
-This plugin was migrated from `cm-multi-review` (previously part of `context-memory`).
-
-**Breaking changes:**
-- Command renamed from `/cm-multi-review` to `/multi-review`
-- Now requires standalone installation
-
-**Deprecation:**
-- `/cm-multi-review` will show a deprecation warning
-- Migrate to `/multi-review` for continued support
 
 ## Installation
 
