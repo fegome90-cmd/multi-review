@@ -74,7 +74,42 @@ def get_session_files(context_file: Optional[Path] = None) -> List[Path]:
     return []
 
 
-def run_session_review(files: List[Path]) -> Dict:
+def detect_session_context(files: List[Path]) -> Dict[str, Any]:
+    """Detect session context from file list.
+
+    Args:
+        files: List of files in session.
+
+    Returns:
+        Context dict with file counts, types, and line counts.
+    """
+    total_files = len(files)
+    python_files = sum(1 for f in files if f.suffix == ".py")
+
+    # Calculate total lines
+    total_lines = 0
+    for file in files:
+        try:
+            total_lines += len(file.read_text().splitlines())
+        except Exception:
+            # Skip files that can't be read
+            pass
+
+    # Detect file types
+    file_types = {}
+    for file in files:
+        ext = file.suffix
+        file_types[ext] = file_types.get(ext, 0) + 1
+
+    return {
+        "total_files": total_files,
+        "python_files": python_files,
+        "total_lines": total_lines,
+        "file_types": file_types,
+    }
+
+
+def run_session_review(files: List[Path], preset: str = "quick") -> Dict:
     """Run comprehensive session review.
 
     Args:

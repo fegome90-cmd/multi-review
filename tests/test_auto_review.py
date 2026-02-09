@@ -2,17 +2,22 @@
 
 import json
 import pytest
+import subprocess
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, call
+from io import StringIO
 
 from auto_review import (
     detect_review_context,
     should_skip_review,
     run_review_agents,
+    save_report,
     validate_preset,
+    main,
     EXIT_SUCCESS,
     EXIT_ISSUES_FOUND,
     EXIT_ERROR,
+    ExitCodes,
 )
 
 
@@ -336,3 +341,247 @@ class TestPresetSelection:
     def test_type_files_use_comprehensive(self):
         """Files with type definitions should use comprehensive preset."""
         context = {"line_count": 100, "has_tests": False, "has_types": True}
+
+
+class TestRunWithTestOrTypeContext:
+    """Tests for preset modification based on test/type context."""
+
+    @patch('auto_review.subprocess.run')
+    def test_test_files_uses_thorough_preset(self, mock_run, temp_file):
+        """Files with has_tests=True should use thorough preset."""
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = json.dumps({"available_agents": ["feature-dev:code-reviewer"]})
+        mock_run.return_value = mock_result
+
+        # Even for small files, test files should trigger thorough
+        context = {"line_count": 30, "has_tests": True, "has_types": False}
+        result = run_review_agents(context, silent=True, preset=None)
+
+        assert result["preset"] == "thorough"
+
+    @patch('auto_review.subprocess.run')
+    def test_type_files_uses_comprehensive_preset(self, mock_run, temp_file):
+        """Files with has_types=True should use comprehensive preset."""
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = json.dumps({"available_agents": ["feature-dev:code-reviewer"]})
+        mock_run.return_value = mock_result
+
+        # Even for medium files, type files should trigger comprehensive
+        context = {"line_count": 100, "has_tests": False, "has_types": True}
+        result = run_review_agents(context, silent=True, preset=None)
+
+        assert result["preset"] == "comprehensive"
+
+    @patch('auto_review.subprocess.run')
+    def test_types_overrides_tests_preset(self, mock_run, temp_file):
+        """Type files should override test file preset selection."""
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = json.dumps({"available_agents": ["feature-dev:code-reviewer"]})
+        mock_run.return_value = mock_result
+
+        # Both has_tests and has_types - types should win (comprehensive)
+        context = {"line_count": 100, "has_tests": True, "has_types": True}
+        result = run_review_agents(context, silent=True, preset=None)
+
+        assert result["preset"] == "comprehensive"
+
+
+class TestRunReviewAgentsLogging:
+    """Tests for logging behavior in run_review_agents."""
+
+    @patch('auto_review.subprocess.run')
+    @patch('auto_review.logger')
+    def test_logs_preset_when_not_silent(self, mock_logger, mock_run, temp_file):
+        """Should log preset name when silent=False."""
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = json.dumps({"available_agents": ["feature-dev:code-reviewer"]})
+        mock_run.return_value = mock_result
+
+        context = detect_review_context(temp_file)
+        result = run_review_agents(context, silent=False)
+
+        assert result["success"] is True
+        # Verify logger.info was called with preset
+        mock_logger.info.assert_called()
+        args = mock_logger.info.call_args[0]
+        assert "quick" in args[0] or "thorough" in args[0] or "comprehensive" in args[0]
+
+
+class TestSaveReport:
+    """Tests for save_report function."""
+
+    @patch('auto_review.save_report_to_file')
+    def test_save_report_creates_correct_data_structure(self, mock_save):
+        """Should create correct report data structure."""
+        mock_save.return_value = Path("/path/to/report.json")
+
+        results = {"preset": "quick", "issues_found": 0}
+        context = {"file_path": "test.py", "line_count": 100}
+
+        report_path = save_report(results, context)
+
+        # Verify save_report_to_file was called with correct structure
+        mock_save.assert_called_once()
+        call_args = mock_save.call_args
+        report_data = call_args[0][0]
+        report_type = call_args[0][1]
+
+        assert report_type == "review"
+        assert report_data["context"] == context
+        assert report_data["results"] == results
+
+    @patch('auto_review.save_report_to_file')
+    def test_save_propagates_none_on_save_failure(self, mock_save):
+        """Should return None when save fails."""
+        mock_save.return_value = None
+
+        results = {"preset": "quick", "issues_found": 0}
+        context = {"file_path": "test.py", "line_count": 100}
+
+        report_path = save_report(results, context)
+
+        assert report_path is None
+
+
+class TestMain:
+    """Tests for main() entry point."""
+
+    @patch('auto_review.sys.argv', ['auto_review.py'])
+    @patch('auto_review.detect_review_context')
+    @patch('auto_review.should_skip_review')
+    def test_returns_success_when_skipping(self, mock_skip, mock_detect):
+        """Should return EXIT_SUCCESS when review is skipped."""
+        mock_detect.return_value = {"file_path": "test.py", "line_count": 1}
+        mock_skip.return_value = (True, "File too small")
+
+        exit_code = main()
+
+        assert exit_code == EXIT_SUCCESS
+
+    @patch('auto_review.sys.argv', ['auto_review.py', '--file', 'test.py'])
+    @patch('auto_review.detect_review_context')
+    @patch('auto_review.should_skip_review')
+    @patch('auto_review.run_review_agents')
+    @patch('auto_review.save_report')
+    def test_returns_success_with_no_issues(self, mock_save, mock_run, mock_skip, mock_detect):
+        """Should return EXIT_SUCCESS when review finds no issues."""
+        mock_detect.return_value = {"file_path": "test.py", "line_count": 100}
+        mock_skip.return_value = (False, "")
+        mock_run.return_value = {
+            "success": True,
+            "preset": "quick",
+            "agents": ["feature-dev:code-reviewer"],
+            "issues_found": 0,
+            "critical_count": 0
+        }
+        mock_save.return_value = Path("report.json")
+
+        exit_code = main()
+
+        assert exit_code == EXIT_SUCCESS
+
+    @patch('auto_review.sys.argv', ['auto_review.py', '--file', 'test.py'])
+    @patch('auto_review.detect_review_context')
+    @patch('auto_review.should_skip_review')
+    @patch('auto_review.run_review_agents')
+    @patch('auto_review.save_report')
+    def test_returns_issues_found_when_issues_present(self, mock_save, mock_run, mock_skip, mock_detect):
+        """Should return EXIT_ISSUES_FOUND when issues are found."""
+        mock_detect.return_value = {"file_path": "test.py", "line_count": 100}
+        mock_skip.return_value = (False, "")
+        mock_run.return_value = {
+            "success": True,
+            "preset": "quick",
+            "agents": ["feature-dev:code-reviewer"],
+            "issues_found": 5,
+            "critical_count": 1
+        }
+        mock_save.return_value = Path("report.json")
+
+        exit_code = main()
+
+        assert exit_code == EXIT_ISSUES_FOUND
+
+    @patch('auto_review.sys.argv', ['auto_review.py', '--file', 'test.py'])
+    @patch('auto_review.detect_review_context')
+    @patch('auto_review.should_skip_review')
+    @patch('auto_review.run_review_agents')
+    def test_returns_error_on_review_failure(self, mock_run, mock_skip, mock_detect):
+        """Should return EXIT_ERROR when review fails."""
+        mock_detect.return_value = {"file_path": "test.py", "line_count": 100}
+        mock_skip.return_value = (False, "")
+        mock_run.return_value = {
+            "success": False,
+            "error": "timeout"
+        }
+
+        exit_code = main()
+
+        assert exit_code == EXIT_ERROR
+
+    @patch('auto_review.sys.argv', ['auto_review.py', '--file', 'test.py', '--preset', 'invalid'])
+    @patch('auto_review.detect_review_context')
+    def test_returns_invalid_args_for_bad_preset(self, mock_detect):
+        """Should return EXIT_INVALID_ARGS for invalid preset."""
+        mock_detect.return_value = {"file_path": "test.py", "line_count": 100}
+
+        exit_code = main()
+
+        assert exit_code == ExitCodes.INVALID_ARGS
+
+    @patch('auto_review.sys.argv', ['auto_review.py', '--file', 'test.py', '--preset', 'quick'])
+    @patch('auto_review.detect_review_context')
+    @patch('auto_review.should_skip_review')
+    @patch('auto_review.run_review_agents')
+    @patch('auto_review.save_report')
+    def test_uses_explicit_preset_when_provided(self, mock_save, mock_run, mock_skip, mock_detect):
+        """Should use explicitly provided preset instead of auto-selection."""
+        mock_detect.return_value = {"file_path": "test.py", "line_count": 1000}
+        mock_skip.return_value = (False, "")
+        mock_run.return_value = {
+            "success": True,
+            "preset": "quick",  # Should use 'quick' even for large file
+            "agents": ["feature-dev:code-reviewer"],
+            "issues_found": 0,
+            "critical_count": 0
+        }
+        mock_save.return_value = Path("report.json")
+
+        exit_code = main()
+
+        assert exit_code == EXIT_SUCCESS
+        # Verify run_review_agents was called with explicit preset
+        mock_run.assert_called_once()
+        call_kwargs = mock_run.call_args[1]
+        assert call_kwargs["preset"] == "quick"
+
+    @patch('auto_review.sys.argv', ['auto_review.py', '--file', 'test.py', '--silent'])
+    @patch('auto_review.detect_review_context')
+    @patch('auto_review.should_skip_review')
+    @patch('auto_review.run_review_agents')
+    @patch('auto_review.save_report')
+    def test_outputs_json_in_silent_mode(self, mock_save, mock_run, mock_skip, mock_detect, capsys):
+        """Should output JSON in silent mode."""
+        mock_detect.return_value = {"file_path": "test.py", "line_count": 100}
+        mock_skip.return_value = (False, "")
+        mock_run.return_value = {
+            "success": True,
+            "preset": "quick",
+            "agents": ["feature-dev:code-reviewer"],
+            "issues_found": 0,
+            "critical_count": 0
+        }
+        mock_save.return_value = Path("report.json")
+
+        exit_code = main()
+
+        captured = capsys.readouterr()
+        output = json.loads(captured.out)
+
+        assert output["preset"] == "quick"
+        assert output["issues_found"] == 0
+        assert "report" in output
