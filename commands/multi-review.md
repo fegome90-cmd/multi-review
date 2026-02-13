@@ -1,16 +1,18 @@
 ---
-description: Interactive multi-agent code review with smart agent selection
-argument-hint: [--agents AGENTS]
+description: Interactive multi-agent code review with smart agent selection and false positive elimination
+argument-hint: [--agents AGENTS] [--evidence-mode] [--refresh-cache]
 allowed-tools: Skill, Task, TaskOutput, AskUserQuestion, Bash, Read
 ---
 
 # Multi-Agent Code Review
 
-Run comprehensive code reviews using multiple specialized agents with interactive configuration.
+Run comprehensive code reviews using multiple specialized agents with interactive configuration and false positive elimination via 3-Layer Defense.
 
 ## Variables
 
 - `--agents AGENTS`: Comma-separated agent list or preset name (optional, prompts if not provided)
+- `--evidence-mode`: Enable evidence-based validation (runs ruff/mypy for Layer 3)
+- `--refresh-cache`: Refresh DSPy prompt cache (takes 30+ seconds, user-initiated only)
 
 ## Instructions
 
@@ -24,6 +26,21 @@ Run the Python script to get context-aware suggestions:
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/context_detector.py" --suggest
 ```
 Use this to inform the default preset choice, but don't auto-select without user confirmation.
+
+**Step 1.5: Build project context (3-Layer Defense - Layer 1)**
+
+Before launching agents, build the ProjectContext for false positive elimination:
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/context_detector.py" --context-json
+```
+
+This extracts:
+- **Python config**: mypy strictness, ruff rules, type checking level
+- **Shell config**: Scripts with `set -euo pipefail` (strict mode)
+- **Test config**: Test framework, coverage settings
+- **Git metadata**: Changed files, branch info
+
+Pass this context to each agent prompt to enable context-aware filtering.
 
 **Step 2: Determine agents to run**
 
@@ -42,21 +59,32 @@ If NO `--agents` argument:
 
 **Step 3: Launch agents in parallel**
 
-For EACH agent in the selected preset, launch a background agent using the Task tool:
+For EACH agent in the selected preset, launch a background agent using the Task tool.
+
+**CRITICAL:** Use calibrated prompts from DSPy cache (Layer 1). The prompt includes project context:
 
 ```markdown
 Task(
   subagent_type="<agent_type>",
   description="Code review: <agent_name>",
-  prompt="Review the code changes in this workspace. Focus on: <agent_focus>. Return findings with:
-  - Severity (critical/important/suggestion)
-  - Confidence score (0-100 based on criteria below)
-  - File path and line numbers
-  - Brief description
-  - Suggested fix (if applicable)",
+  prompt="<CALIBRATED_PROMPT_FROM_CACHE>
+
+PROJECT CONTEXT:
+- Python type checking: <mypy_strictness>
+- Shell strict mode files: <strict_mode_files>
+- Test framework: <test_framework>
+
+Review the code changes in this workspace. Return findings with:
+- Severity (critical/important/suggestion)
+- Confidence score (0-100 based on criteria)
+- File path and line numbers
+- Brief description
+- Suggested fix (if applicable)",
   run_in_background=true
 )
 ```
+
+**Calibrated prompts are loaded from cache (~1ms) - NEVER wait for API.**
 
 Store the returned `task_id` for each agent in a list for later retrieval.
 
@@ -83,16 +111,43 @@ Store the returned `task_id` for each agent in a list for later retrieval.
 
 Use `TaskOutput(task_id=..., block=true, timeout=300000)` for each agent to retrieve results. Handle timeouts gracefully and report which agents didn't complete.
 
-**Step 5: Aggregate and present results**
+**Step 5: Filter and aggregate results (3-Layer Defense - Layers 2 & 3)**
 
-Parse results from all agents and categorize by:
-- **Critical Issues** (severity: critical, confidence: 75-100)
-- **Important Issues** (severity: important, confidence: 50-74)
-- **Suggestions** (severity: suggestion, confidence: 25-49)
-- **False positives to ignore** (confidence: 0)
+First, save the context JSON:
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/context_detector.py" --context-json > /tmp/project_context.json
+```
+
+Then parse all agent outputs and apply filtering using the aggregator:
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/finding_aggregator.py" \
+  --context-json /tmp/project_context.json \
+  --findings-json /tmp/findings.json \
+  ${EVIDENCE_MODE:+--evidence-mode} \
+  --output-format markdown
+```
+
+The aggregator applies 3-Layer Defense filtering:
+- **Layer 2 (Mechanical Filtering)**: Typed predicates suppress known false positives
+- **Layer 3 (Evidence Validation)**: Optional cross-reference with ruff/mypy (when `--evidence-mode`)
+
+**Categorize findings by filtered confidence:**
+- **Critical Issues** (filtered_confidence: 75-100)
+- **Important Issues** (filtered_confidence: 50-74)
+- **Suggestions** (filtered_confidence: 25-49)
+- **Suppressed** (with reason logged)
 - **Strengths** (positive findings)
 
-Include which agent found each issue for traceability.
+**Suppression Reasons (Layer 2):**
+| Reason | Description |
+|--------|-------------|
+| Shell strict mode | `set -euo pipefail` handles error handling |
+| Style nitpick | Low-severity formatting/naming issues |
+| Internal helper | Type annotations not required for `_` prefixed functions |
+| Low value | Low confidence + low severity |
+| Tool already catches | ruff/mypy would flag this |
+
+Include which agent found each issue and suppression reason for traceability.
 
 **Step 6: Ask for next action**
 
@@ -177,6 +232,12 @@ Then launch only the selected agents using the Task tool in Step 3.
 
 # Direct agent list (custom selection without prompt)
 /multi-review --agents feature-dev:code-reviewer,pr-review-toolkit:pr-test-analyzer,pr-review-toolkit:type-design-analyzer
+
+# Evidence-based validation (runs ruff/mypy to verify findings)
+/multi-review --agents thorough --evidence-mode
+
+# Refresh prompt calibration (takes 30+ seconds)
+/multi-review --refresh-cache
 ```
 
 **Note:** When agents are specified, they launch in parallel using background Task tool. The command waits for all to complete before aggregating results.
@@ -299,6 +360,83 @@ After review completes, choose next step:
 - Sequential mode allows agents to build on previous findings
 - Framework-specific guidance ensures compliance with project patterns
 - Confidence scores help filter false positives (ignore issues with score < 25)
+- Use `--evidence-mode` for thorough validation (runs ruff/mypy to verify findings)
+- Use `--refresh-cache` to update DSPy prompt calibration (takes 30+ seconds)
+
+## 3-Layer Defense Architecture
+
+This command uses a 3-Layer Defense system to eliminate false positives:
+
+```
+/multi-review command
+        │
+        ▼
+┌─────────────────────────────────────┐
+│ LAYER 1: Context Injection          │
+│ (project_context.py)                │
+│                                     │
+│ ProjectContext with:                │
+│  - PythonConfig (mypy, ruff rules)  │
+│  - ShellConfig (strict mode files)  │
+│  - TestConfig (patterns, coverage)  │
+│  - GitMetadata (changed files)      │
+└─────────────────┬───────────────────┘
+                  │
+                  ▼
+┌─────────────────────────────────────┐
+│ LAYER 1.5: Prompt Calibration       │
+│ (dspy_client.py with caching)       │
+│                                     │
+│ Calibrated guardrails:              │
+│  - DO NOT flag X when Y             │
+│  - Focus ONLY on Z                  │
+│                                     │
+│ Reduction: ~44%                     │
+└─────────────────┬───────────────────┘
+                  │
+                  ▼
+┌─────────────────────────────────────┐
+│ Agent Execution (Task tool)         │
+│ - Calibrated prompts with context   │
+└─────────────────┬───────────────────┘
+                  │
+                  ▼
+┌─────────────────────────────────────┐
+│ LAYER 2: Post-Filtering             │
+│ (finding_filter.py)                 │
+│                                     │
+│ Typed predicates:                   │
+│  - is_shell_strict_mode()           │
+│  - is_style_nitpick()               │
+│  - is_internal_helper()             │
+│  - is_low_value_finding()           │
+│                                     │
+│ Reduction: +30%                     │
+└─────────────────┬───────────────────┘
+                  │
+                  ▼
+┌─────────────────────────────────────┐
+│ LAYER 3: Validation Pass            │
+│ (validation_pass.py)                │
+│                                     │
+│ Cross-reference with tools:         │
+│  - Does ruff already catch this?    │
+│  - Does mypy contradict this?       │
+│  - Does it match project patterns?  │
+│                                     │
+│ Reduction: +15%                     │
+└─────────────────┬───────────────────┘
+                  │
+                  ▼
+         Filtered Results
+    (Target: <15% FP rate)
+```
+
+**Cache Strategy (FAIL-CLOSED):**
+- Pre-compiled prompts at install time
+- Hash lookup at runtime (~1ms)
+- API NEVER in runtime path (30s latency)
+- Manual refresh via `--refresh-cache` only
 
 ## Plugin Dependencies
 
