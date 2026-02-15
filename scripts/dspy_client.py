@@ -45,6 +45,9 @@ DEFAULT_API_URL = "http://localhost:8000/api/v1/improve-prompt"
 DEFAULT_API_TIMEOUT = 60  # seconds
 DEFAULT_API_MODE = "legacy"  # Use 'legacy' mode (stable, produces correct guardrails)
 
+# Audit log configuration
+AUDIT_LOG_NAME = "audit_log.jsonl"
+
 
 # =============================================================================
 # CACHE DATACLASS
@@ -111,6 +114,45 @@ class CachedPrompt:
 
 
 # =============================================================================
+# AUDIT LOG ENTRY
+# =============================================================================
+
+@dataclass
+class PromptAuditEntry:
+    """Audit entry for prompt cache refresh operations.
+
+    This enables tracking of cache refresh operations for:
+    - Reproducibility (know when prompts were updated)
+    - Debugging (trace prompt changes)
+    - Compliance (audit trail of API calls)
+
+    Attributes:
+        timestamp: ISO timestamp of the refresh operation.
+        context_hash: Hash of the context for this prompt.
+        agent_name: Name of the agent.
+        old_prompt_hash: Hash of the previous prompt (None if new).
+        new_prompt_hash: Hash of the new prompt.
+        schema_version: Version of the audit entry schema.
+        model: Model used for calibration (e.g., 'claude-sonnet-4.5').
+    """
+    timestamp: str
+    context_hash: str
+    agent_name: str
+    old_prompt_hash: Optional[str]
+    new_prompt_hash: str
+    schema_version: str = "1.0.0"
+    model: str = "claude-sonnet-4.5"
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for JSON serialization."""
+        return asdict(self)
+
+    def to_jsonl(self) -> str:
+        """Convert to JSONL format (single line JSON)."""
+        return json.dumps(self.to_dict())
+
+
+# =============================================================================
 # DEFAULT PROMPTS (Pre-compiled)
 # =============================================================================
 
@@ -129,11 +171,25 @@ Skip:
 - Type annotation gaps (handled by mypy)
 - Nitpicks and optional enhancements
 
-Provide findings with:
-- Severity: Critical/Important/Low
-- Confidence: 0-100 (0=false positive, 100=certain)
-- File and line numbers
-- Brief description and suggested fix""",
+OUTPUT FORMAT - Use XML tags for each finding:
+
+<finding id="1" confidence="75" severity="Important">
+  <file>src/auth.py</file>
+  <line>45</line>
+  <category>security</category>
+  <description>Brief description of the issue</description>
+  <evidence>
+    <ref tool="code-review">Why this is an issue</ref>
+  </evidence>
+  <suggested_fix>How to fix it</suggested_fix>
+</finding>
+
+Confidence Scoring Guide:
+- 0: False positive or pre-existing issue
+- 25: Low - might be real but likely nitpick
+- 50: Medium - verified real but rarely hit
+- 75: High - very likely real and commonly hit
+- 100: Certain - directly confirmed, frequently encountered""",
         "guardrails": [
             "1. Do not flag issues already caught by configured linters",
             "2. Focus on critical domains: auth, payments, data integrity",
@@ -152,7 +208,27 @@ Focus on:
 Skip:
 - Error handling covered by shell strict mode (set -euo pipefail)
 - Intentional silent failures with clear comments
-- Error handling in test fixtures""",
+- Error handling in test fixtures
+
+OUTPUT FORMAT - Use XML tags for each finding:
+
+<finding id="1" confidence="75" severity="Important">
+  <file>src/api.py</file>
+  <line>128</line>
+  <category>error_handling</category>
+  <description>Description of silent failure</description>
+  <evidence>
+    <ref tool="silent-failure-hunter">Why this is problematic</ref>
+  </evidence>
+  <suggested_fix>How to add proper error handling</suggested_fix>
+</finding>
+
+Confidence Scoring Guide:
+- 0: False positive or intentional design
+- 25: Low - might be issue but acceptable
+- 50: Medium - real gap but low impact
+- 75: High - definite gap with real impact
+- 100: Certain - critical silent failure""",
         "guardrails": [
             "1. Only flag genuine error-handling gaps",
             "2. Distinguish between silent failures and handled fallbacks",
@@ -171,7 +247,27 @@ Focus on:
 Skip:
 - Tests for trivial getters/setters
 - 100% coverage requirements for internal helpers
-- Style issues in test files""",
+- Style issues in test files
+
+OUTPUT FORMAT - Use XML tags for each finding:
+
+<finding id="1" confidence="75" severity="Important">
+  <file>tests/user_test.py</file>
+  <line>45</line>
+  <category>test_coverage</category>
+  <description>Missing test for X scenario</description>
+  <evidence>
+    <ref tool="pr-test-analyzer">Why this test matters</ref>
+  </evidence>
+  <suggested_fix>Add test case for X</suggested_fix>
+</finding>
+
+Confidence Scoring Guide:
+- 0: Not a coverage gap
+- 25: Low - nice to have test
+- 50: Medium - real gap but low risk
+- 75: High - critical path untested
+- 100: Certain - security/critical path has no coverage""",
         "guardrails": [
             "1. Focus on critical domains: auth, payments, data",
             "2. Only recommend tests for actual coverage gaps",
@@ -190,7 +286,27 @@ Focus on:
 Skip:
 - Type annotations in internal helpers (if not strict mode)
 - Optional type enhancements (could use Literal, etc.)
-- Style issues in type definitions""",
+- Style issues in type definitions
+
+OUTPUT FORMAT - Use XML tags for each finding:
+
+<finding id="1" confidence="75" severity="Important">
+  <file>src/models.py</file>
+  <line>23</line>
+  <category>type_design</category>
+  <description>Type invariant violation</description>
+  <evidence>
+    <ref tool="type-design-analyzer">Why this matters</ref>
+  </evidence>
+  <suggested_fix>Strengthen type definition</suggested_fix>
+</finding>
+
+Confidence Scoring Guide:
+- 0: Not a type issue
+- 25: Low - optional enhancement
+- 50: Medium - real weakness but low impact
+- 75: High - type safety risk
+- 100: Certain - runtime error possible""",
         "guardrails": [
             "1. Focus on types that affect correctness",
             "2. Consider project's type checking strictness",
@@ -209,7 +325,27 @@ Focus on:
 Skip:
 - Working code that is already clear
 - Complex code that is justified by requirements
-- Refactoring that changes behavior""",
+- Refactoring that changes behavior
+
+OUTPUT FORMAT - Use XML tags for each finding:
+
+<finding id="1" confidence="50" severity="Low">
+  <file>src/utils.py</file>
+  <line>112</line>
+  <category>complexity</category>
+  <description>Function can be simplified</description>
+  <evidence>
+    <ref tool="code-simplifier">Why simplification helps</ref>
+  </evidence>
+  <suggested_fix>Extract to helper function</suggested_fix>
+</finding>
+
+Confidence Scoring Guide:
+- 0: Code is fine as-is
+- 25: Low - minor improvement possible
+- 50: Medium - noticeable complexity
+- 75: High - significant maintainability issue
+- 100: Certain - critical complexity blocking work""",
         "guardrails": [
             "1. Only simplify if it improves clarity",
             "2. Preserve all functionality",
@@ -241,7 +377,27 @@ Provide findings with:
 - File and line numbers
 - Brief description and suggested fix
 
-Focus on actionable issues, not nitpicks.""",
+Focus on actionable issues, not nitpicks.
+
+OUTPUT FORMAT - Use XML tags for each finding:
+
+<finding id="1" confidence="75" severity="Important">
+  <file>src/file.py</file>
+  <line>42</line>
+  <category>general</category>
+  <description>Description of the issue</description>
+  <evidence>
+    <ref tool="review">Why this is an issue</ref>
+  </evidence>
+  <suggested_fix>How to fix it</suggested_fix>
+</finding>
+
+Confidence Scoring Guide:
+- 0: False positive
+- 25: Low - might be real but nitpick
+- 50: Medium - verified real, rarely hit
+- 75: High - very likely real
+- 100: Certain - directly confirmed""",
         "guardrails": [
             "1. Focus on critical issues",
             "2. Provide actionable recommendations",
@@ -289,6 +445,37 @@ class DSPyClient:
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.ttl_days = ttl_days
+        self._audit_log_path = self.cache_dir / AUDIT_LOG_NAME
+
+    def _append_audit_entry(self, entry: PromptAuditEntry) -> bool:
+        """Append an entry to the audit log.
+
+        Args:
+            entry: The audit entry to append.
+
+        Returns:
+            True if append was successful.
+        """
+        try:
+            # Append to JSONL file
+            with open(self._audit_log_path, 'a', encoding='utf-8') as f:
+                f.write(entry.to_jsonl() + '\n')
+            logger.debug(f"Appended audit entry for {entry.agent_name}")
+            return True
+        except OSError as e:
+            logger.warning(f"Failed to append audit entry: {e}")
+            return False
+
+    def _get_prompt_hash(self, prompt: str) -> str:
+        """Get hash of a prompt for audit tracking.
+
+        Args:
+            prompt: The prompt text.
+
+        Returns:
+            16-character hash string.
+        """
+        return hashlib.sha256(prompt.encode()).hexdigest()[:16]
 
     def _hash_context(self, agent_name: str, context: "ProjectContext") -> str:
         """Generate hash for cache lookup.
@@ -500,6 +687,12 @@ class DSPyClient:
 
         context_hash = self._hash_context(agent_name, context)
 
+        # Get old prompt hash for audit (if exists)
+        old_cached = self._load_cached_prompt(context_hash)
+        old_prompt_hash = None
+        if old_cached:
+            old_prompt_hash = self._get_prompt_hash(old_cached.calibrated_prompt)
+
         # Build request
         payload = {
             "prompt": f"Review prompt for {agent_name}",
@@ -533,6 +726,18 @@ class DSPyClient:
                 ttl_days=self.ttl_days,
             )
             self._save_cached_prompt(cached)
+
+            # Create audit entry
+            new_prompt_hash = self._get_prompt_hash(calibrated_prompt)
+            audit_entry = PromptAuditEntry(
+                timestamp=datetime.now().isoformat(),
+                context_hash=context_hash,
+                agent_name=agent_name,
+                old_prompt_hash=old_prompt_hash,
+                new_prompt_hash=new_prompt_hash,
+                model="claude-sonnet-4.5",  # Default model
+            )
+            self._append_audit_entry(audit_entry)
 
             logger.info(f"Successfully refreshed prompt for {agent_name}")
             return calibrated_prompt

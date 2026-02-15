@@ -890,8 +890,8 @@ def detect_result_pattern(repo_root: Path, files: List[str]) -> Dict[str, Any]:
                         result["uses_result_pattern"] = True
                         result["evidence"].append(f"{file_path}:{i}:{line_stripped[:60]}")
                         break
-        except (OSError, PermissionError):
-            pass
+        except (OSError, PermissionError) as e:
+            logger.debug(f"Could not read {file_path} for Result pattern detection: {e}")
 
     return result
 

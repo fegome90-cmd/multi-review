@@ -149,7 +149,49 @@ The aggregator applies 3-Layer Defense filtering:
 
 Include which agent found each issue and suppression reason for traceability.
 
-**Step 6: Ask for next action**
+**Step 6.5: Collect feedback (optional learning)**
+
+After displaying findings, offer to collect feedback for learning:
+
+Use `AskUserQuestion` to ask:
+"Would you like to provide feedback on these findings to improve future reviews?"
+
+Options:
+- `Yes, review findings` - Collect feedback on each finding
+- `No, skip feedback` - Continue without feedback collection
+
+If user selects feedback collection, for EACH non-suppressed finding in the active list:
+
+```markdown
+AskUserQuestion({
+  questions: [{
+    question: "Is this finding accurate and actionable?",
+    header: "Feedback",
+    multiSelect: false,
+    options: [
+      { label: "Real issue", description: "Confirmed real problem that should be addressed" },
+      { label: "False positive", description: "Incorrect - this is not an actual issue" },
+      { label: "Already fixed", description: "Issue was already addressed elsewhere" },
+      { label: "Not actionable", description: "Real but not worth addressing (low priority)" }
+    ]
+  }]
+})
+```
+
+For "False positive" selections, ask for an optional reason (short text input).
+
+Then record the feedback:
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/feedback_manager_cli.py" \
+  --record \
+  --finding-json '<finding_json>' \
+  --feedback-type <feedback_type> \
+  --reason "<optional_reason>"
+```
+
+The feedback system learns patterns from repeated false positives and automatically creates suppression rules after 3+ similar FPs.
+
+**Step 7: Ask for next action**
 
 Use `AskUserQuestion` to offer:
 - `Apply fixes` - Run `superpowers:receiving-code-review` to process feedback

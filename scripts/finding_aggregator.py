@@ -35,6 +35,7 @@ from finding_filter import (
 )
 from project_context import ProjectContext
 from validation_pass import ValidationPass, ValidationMode
+from xml_finding_parser import parse_xml_findings, has_xml_findings
 
 logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 logger = logging.getLogger(__name__)
@@ -86,6 +87,30 @@ def parse_confidence(confidence_str: str) -> int:
 
 def parse_agent_output(agent_name: str, output: str) -> List[Finding]:
     """Parse agent output text into Finding objects.
+
+    Tries XML parsing first, falls back to regex patterns.
+
+    Args:
+        agent_name: Name of the agent that produced the output.
+        output: Raw output text from the agent.
+
+    Returns:
+        List of Finding objects extracted from the output.
+    """
+    # Try XML parsing first (more robust)
+    if has_xml_findings(output):
+        xml_findings = parse_xml_findings(output, agent_name)
+        if xml_findings:
+            logger.info(f"Successfully parsed {len(xml_findings)} XML findings from {agent_name}")
+            return xml_findings
+
+    # Fall back to regex parsing
+    logger.debug(f"No XML findings found for {agent_name}, using regex fallback")
+    return _parse_regex_findings(agent_name, output)
+
+
+def _parse_regex_findings(agent_name: str, output: str) -> List[Finding]:
+    """Parse agent output using regex patterns (legacy fallback).
 
     Args:
         agent_name: Name of the agent that produced the output.
@@ -276,17 +301,27 @@ def apply_filtering(
 
         # Update filtered results with validated findings
         active = []
-        for i, result in enumerate(filtered_results):
+        validated_idx = 0
+        for result in filtered_results:
             if not result.is_suppressed:
                 # Replace with validated finding
-                validated = validated_findings[i] if i < len(validated_findings) else result.finding
-                active.append(FilteredFinding(
-                    finding=validated,
-                    action=result.action,
-                    filtered_confidence=validated.confidence,
-                    reason=result.reason,
-                    is_suppressed=validated.confidence == 0,
-                ))
+                validated = validated_findings[validated_idx] if validated_idx < len(validated_findings) else result.finding
+                validated_idx += 1
+                # If validation set confidence to 0, suppress
+                if validated.confidence == 0:
+                    active.append(FilteredFinding(
+                        finding=validated,
+                        action=FilterAction.SUPPRESS,
+                        filtered_confidence=0,
+                        reason=f"Validation pass: {result.reason}",
+                    ))
+                else:
+                    active.append(FilteredFinding(
+                        finding=validated,
+                        action=result.action,
+                        filtered_confidence=validated.confidence,
+                        reason=result.reason,
+                    ))
 
     # Categorize by confidence
     categories = filter.categorize_findings([r.finding for r in active])
@@ -457,11 +492,15 @@ def main() -> None:
             'summary': results['summary'],
             'categories': {
                 k: [
-                    {'id': f.id, 'file': f.file, 'line': f.line,
-                     'severity': f.severity, 'confidence': f.confidence,
-                     'description': f.description, 'source_agent': f.source_agent}
+                    {'id': f.finding.id, 'file': f.finding.file, 'line': f.finding.line,
+                     'severity': f.finding.severity, 'confidence': f.filtered_confidence,
+                     'description': f.finding.description, 'source_agent': f.finding.source_agent}
                     for f in v
-                ] if k != 'suppressed' else v
+                ] if k != 'suppressed' else [
+                    {'id': item['finding'].id, 'description': item['finding'].description,
+                     'reason': item['reason']}
+                    for item in v
+                ]
                 for k, v in results['categories'].items()
             },
         }

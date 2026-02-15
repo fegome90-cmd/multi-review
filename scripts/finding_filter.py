@@ -41,6 +41,50 @@ class FilterAction(Enum):
 
 
 # =============================================================================
+# SUPPRESSION REASON CODES (Namespaced by Layer)
+# =============================================================================
+
+class SuppressionReasonCode(Enum):
+    """Canonical reason codes with layer namespace.
+
+    L2_* codes are for Layer 2 (Mechanical Filtering).
+    L3_* codes are for Layer 3 (Evidence-Based Validation).
+
+    Attributes:
+        L2_SHELL_STRICT_MODE: Shell script has `set -euo pipefail`.
+        L2_STYLE_NITPICK: Non-actionable style issue.
+        L2_INTERNAL_HELPER: Internal helper function, mypy not strict.
+        L2_MYPY_NOT_STRICT: Mypy configured as relaxed.
+        L2_LOW_VALUE: Low confidence AND low severity.
+        L2_TOOL_ALREADY_CATCHES: Existing tool already catches this.
+        L2_OPTIONAL_ENHANCEMENT: Optional enhancement suggestion.
+        L2_PRE_EXISTING_CODE: Pre-existing code (not changed in this PR).
+        L2_LEARNED_PATTERN: Learned from feedback patterns.
+
+        L3_NO_EVIDENCE_MATCH: No tool evidence supports finding.
+        L3_VALIDATION_CONTRADICTED: Tool output contradicts finding.
+        L3_TOOL_TIMEOUT: Tool timed out during validation.
+        L3_TOOL_MISSING: Tool not installed or available.
+    """
+    # Layer 2: Mechanical Filtering
+    L2_SHELL_STRICT_MODE = "L2_shell_strict_mode"
+    L2_STYLE_NITPICK = "L2_style_nitpick"
+    L2_INTERNAL_HELPER = "L2_internal_helper"
+    L2_MYPY_NOT_STRICT = "L2_mypy_not_strict"
+    L2_LOW_VALUE = "L2_low_value"
+    L2_TOOL_ALREADY_CATCHES = "L2_tool_already_catches"
+    L2_OPTIONAL_ENHANCEMENT = "L2_optional_enhancement"
+    L2_PRE_EXISTING_CODE = "L2_pre_existing_code"
+    L2_LEARNED_PATTERN = "L2_learned_pattern"
+
+    # Layer 3: Evidence-Based Validation
+    L3_NO_EVIDENCE_MATCH = "L3_no_evidence_match"
+    L3_VALIDATION_CONTRADICTED = "L3_validation_contradicted"
+    L3_TOOL_TIMEOUT = "L3_tool_timeout"
+    L3_TOOL_MISSING = "L3_tool_missing"
+
+
+# =============================================================================
 # FINDING DATACLASS
 # =============================================================================
 
@@ -291,24 +335,125 @@ def is_tool_already_catches(finding: Finding, context: "ProjectContext") -> bool
 # FILTER RULES
 # =============================================================================
 
-# Filter rules are (predicate, action, reason) tuples
+# Filter rules are (predicate, action, reason, confidence_value, reason_code, rule_id) tuples
 # The action can be SUPPRESS or SET_CONFIDENCE(value)
-FilterRule = Tuple[PredicateFn, FilterAction, str, Optional[int]]
+FilterRule = Tuple[PredicateFn, FilterAction, str, Optional[int], Optional[SuppressionReasonCode], Optional[str]]
+
+
+# =============================================================================
+# LEARNED PATTERN PREDICATES
+# =============================================================================
+
+def make_pattern_predicate(pattern_name: str, category: str) -> PredicateFn:
+    """Create a predicate function for a learned pattern.
+
+    Args:
+        pattern_name: Name of the learned pattern.
+        category: Category to match.
+
+    Returns:
+        Predicate function for this pattern.
+    """
+    def matches_learned_pattern(finding: Finding, context: "ProjectContext") -> bool:
+        """Check if finding matches a learned pattern."""
+        # Pattern-to-keyword mapping
+        pattern_keywords = {
+            "sql_orm_handled": ["sql", "orm", "injection", "query"],
+            "orm_handled": ["orm", "handled", "database"],
+            "tool_ruff_catches": ["ruff", "lint", "format"],
+            "tool_mypy_catches": ["mypy", "type", "annotation"],
+            "tool_already_catches": ["tool", "catches", "already"],
+            "test_fixture": ["test", "fixture", "mock"],
+            "test_mock": ["mock", "test", "fake"],
+            "internal_helper": ["internal", "helper", "private", "_"],
+            "private_function": ["private", "internal", "_"],
+            "already_handled": ["already", "handled", "covered"],
+            "handled_by_tool": ["handled", "tool", "covered"],
+            "style_nitpick": ["style", "naming", "format", "whitespace"],
+            "format_nitpick": ["format", "formatting", "whitespace"],
+            "naming_nitpick": ["naming", "name", "variable"],
+        }
+
+        desc_lower = finding.description.lower()
+
+        # Check category match
+        if finding.category.lower() != category.lower():
+            return False
+
+        # Check if description matches pattern keywords
+        keywords = pattern_keywords.get(pattern_name, [pattern_name.replace("_", " ")])
+        matches = sum(1 for kw in keywords if kw in desc_lower)
+
+        # Require at least 2 keyword matches for pattern match
+        return matches >= 2
+
+    return matches_learned_pattern
+
+
+def _load_learned_patterns() -> List[FilterRule]:
+    """Load learned patterns from feedback manager.
+
+    Returns:
+        List of filter rules created from learned patterns.
+    """
+    learned_rules = []
+
+    try:
+        # Import here to avoid circular dependency
+        from feedback_manager import FeedbackManager, FEEDBACK_DIR
+
+        # Check if feedback directory exists
+        if not FEEDBACK_DIR.exists():
+            return learned_rules
+
+        manager = FeedbackManager()
+        calibration = manager.load_calibration()
+
+        for agent_name, agent_cal in calibration.get("agent_calibrations", {}).items():
+            for pattern_data in agent_cal.get("pattern_learnings", []):
+                if pattern_data.get("action") == "suppress":
+                    pattern_name = pattern_data.get("pattern", "unknown")
+                    category = pattern_data.get("category", "general")
+                    count = pattern_data.get("count", 0)
+
+                    # Create predicate for this pattern
+                    predicate = make_pattern_predicate(pattern_name, category)
+
+                    learned_rules.append((
+                        predicate,
+                        FilterAction.SUPPRESS,
+                        f"Learned pattern ({count} FPs): {pattern_name}",
+                        None,
+                        SuppressionReasonCode.L2_LEARNED_PATTERN,
+                        f"L2_rule_learned_{pattern_name}",
+                    ))
+                    logger.debug(f"Loaded learned pattern: {pattern_name} for {agent_name}")
+
+    except ImportError as e:
+        logger.info(f"Feedback manager not available, skipping learned patterns: {e}")
+    except (OSError, json.JSONDecodeError) as e:
+        logger.warning(f"Feedback data corrupted, skipping learned patterns: {e}")
+    except Exception as e:
+        logger.error(f"Unexpected error loading learned patterns: {e}", exc_info=True)
+
+    return learned_rules
 
 
 def _get_default_filter_rules() -> List[FilterRule]:
-    """Get the default set of filter rules.
+    """Get the default set of filter rules including learned patterns.
 
     Returns:
-        List of (predicate, action, reason, confidence_value) tuples.
+        List of (predicate, action, reason, confidence_value, reason_code, rule_id) tuples.
     """
-    return [
+    default_rules = [
         # Shell strict mode: error handling is covered
         (
             is_shell_strict_mode,
             FilterAction.SUPPRESS,
             "Shell strict mode (set -euo pipefail) already handles this",
-            None
+            None,
+            SuppressionReasonCode.L2_SHELL_STRICT_MODE,
+            "L2_rule_shell_strict",
         ),
 
         # Style nitpicks: suppress low-severity style issues
@@ -316,7 +461,9 @@ def _get_default_filter_rules() -> List[FilterRule]:
             is_style_nitpick,
             FilterAction.SUPPRESS,
             "Style nitpick - not actionable",
-            None
+            None,
+            SuppressionReasonCode.L2_STYLE_NITPICK,
+            "L2_rule_style",
         ),
 
         # Internal helpers without strict mypy: suppress type annotation findings
@@ -324,7 +471,9 @@ def _get_default_filter_rules() -> List[FilterRule]:
             is_internal_helper,
             FilterAction.SUPPRESS,
             "Internal helper - mypy not in strict mode",
-            None
+            None,
+            SuppressionReasonCode.L2_INTERNAL_HELPER,
+            "L2_rule_internal",
         ),
 
         # Low value findings: suppress
@@ -332,7 +481,9 @@ def _get_default_filter_rules() -> List[FilterRule]:
             is_low_value_finding,
             FilterAction.SUPPRESS,
             "Low value (low confidence + low severity)",
-            None
+            None,
+            SuppressionReasonCode.L2_LOW_VALUE,
+            "L2_rule_low_value",
         ),
 
         # Tool already catches: suppress (redundant)
@@ -340,7 +491,9 @@ def _get_default_filter_rules() -> List[FilterRule]:
             is_tool_already_catches,
             FilterAction.SUPPRESS,
             "Existing tool already catches this",
-            None
+            None,
+            SuppressionReasonCode.L2_TOOL_ALREADY_CATCHES,
+            "L2_rule_tool_catches",
         ),
 
         # Optional enhancements: reduce confidence (not suppress)
@@ -348,7 +501,9 @@ def _get_default_filter_rules() -> List[FilterRule]:
             is_optional_enhancement,
             FilterAction.SET_CONFIDENCE,
             "Optional enhancement - reduced confidence",
-            35
+            35,
+            SuppressionReasonCode.L2_OPTIONAL_ENHANCEMENT,
+            "L2_rule_optional",
         ),
 
         # Pre-existing issues: reduce confidence significantly
@@ -356,9 +511,19 @@ def _get_default_filter_rules() -> List[FilterRule]:
             is_pre_existing_issue,
             FilterAction.SET_CONFIDENCE,
             "Pre-existing code - focus on new changes",
-            20
+            20,
+            SuppressionReasonCode.L2_PRE_EXISTING_CODE,
+            "L2_rule_pre_existing",
         ),
     ]
+
+    # Add learned patterns from feedback
+    learned_rules = _load_learned_patterns()
+    if learned_rules:
+        logger.info(f"Added {len(learned_rules)} learned filter rules")
+        default_rules.extend(learned_rules)
+
+    return default_rules
 
 
 # =============================================================================
@@ -374,11 +539,15 @@ class FilteredFinding:
         action: What action was taken (SUPPRESS or SET_CONFIDENCE).
         reason: Human-readable reason for the action.
         filtered_confidence: The confidence after filtering.
+        reason_code: Canonical reason code (L2_* or L3_*).
+        filter_rule_id: Identifier for the filter rule that matched (e.g., "L2_rule_shell_strict").
     """
     finding: Finding
     action: FilterAction
     reason: str
     filtered_confidence: int
+    reason_code: Optional[SuppressionReasonCode] = None
+    filter_rule_id: Optional[str] = None
 
     @property
     def is_suppressed(self) -> bool:
@@ -428,9 +597,17 @@ class FindingFilter:
             finding: The finding to filter.
 
         Returns:
-            FilteredFinding with action, reason, and filtered confidence.
+            FilteredFinding with action, reason, filtered confidence, and reason code.
         """
-        for predicate, action, reason, confidence_value in self.filter_rules:
+        for rule in self.filter_rules:
+            # Unpack rule based on length (support both old 4-tuple and new 6-tuple)
+            if len(rule) == 6:
+                predicate, action, reason, confidence_value, reason_code, rule_id = rule
+            else:
+                predicate, action, reason, confidence_value = rule
+                reason_code = None
+                rule_id = None
+
             try:
                 if predicate(finding, self.context):
                     if action == FilterAction.SUPPRESS:
@@ -442,6 +619,8 @@ class FindingFilter:
                             action=action,
                             reason=reason,
                             filtered_confidence=0,
+                            reason_code=reason_code,
+                            filter_rule_id=rule_id,
                         )
                     elif action == FilterAction.SET_CONFIDENCE:
                         new_confidence = confidence_value if confidence_value is not None else finding.confidence
@@ -456,6 +635,8 @@ class FindingFilter:
                             action=action,
                             reason=reason,
                             filtered_confidence=new_confidence,
+                            reason_code=reason_code,
+                            filter_rule_id=rule_id,
                         )
             except Exception as e:
                 logger.warning(
@@ -469,6 +650,8 @@ class FindingFilter:
             action=FilterAction.SET_CONFIDENCE,
             reason="No filter rule matched",
             filtered_confidence=finding.confidence,
+            reason_code=None,
+            filter_rule_id=None,
         )
 
     def filter_findings(self, findings: List[Finding]) -> List[FilteredFinding]:
