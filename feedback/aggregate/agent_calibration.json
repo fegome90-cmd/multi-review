@@ -1,0 +1,23 @@
+{
+  "version": "1.0",
+  "agent_calibrations": {
+    "feature-dev:code-reviewer": {
+      "agent_name": "feature-dev:code-reviewer",
+      "total_findings": 1,
+      "real_issues": 0,
+      "false_positives": 1,
+      "already_fixed": 0,
+      "not_actionable": 0,
+      "pattern_learnings": [
+        {
+          "pattern": "sql_orm_handled",
+          "category": "security",
+          "count": 1,
+          "action": "count"
+        }
+      ],
+      "confidence_adjustment": 1.0
+    }
+  },
+  "last_updated": "2026-02-13T21:26:17.539869"
+}

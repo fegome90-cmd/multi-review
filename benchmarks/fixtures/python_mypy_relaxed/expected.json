@@ -1,0 +1,25 @@
+{
+  "labels": [
+    {
+      "match": {"category": "type_annotation", "description_pattern": "internal|private|helper|_"},
+      "expected": "SUPPRESSED",
+      "reason_code": "L2_INTERNAL_HELPER"
+    },
+    {
+      "match": {"category": "type-annotation", "description_pattern": "internal|private|helper"},
+      "expected": "SUPPRESSED",
+      "reason_code": "L2_INTERNAL_HELPER"
+    },
+    {
+      "match": {"category": "typing", "file": "helpers.py"},
+      "expected": "SUPPRESSED",
+      "reason_code": "L2_MYPY_NOT_STRICT"
+    }
+  ],
+  "metadata": {
+    "description": "Python internal helpers with relaxed mypy configuration",
+    "fixture_type": "python",
+    "mypy_strict": false,
+    "expected_behavior": "Type annotation findings for internal helpers should be suppressed when mypy is not strict"
+  }
+}

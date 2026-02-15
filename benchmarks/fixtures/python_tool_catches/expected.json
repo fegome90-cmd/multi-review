@@ -1,0 +1,35 @@
+{
+  "labels": [
+    {
+      "match": {"category": "type_annotation", "description_pattern": "type hint|annotation|typing"},
+      "expected": "SUPPRESSED",
+      "reason_code": "L2_TOOL_ALREADY_CATCHES"
+    },
+    {
+      "match": {"category": "type-annotation"},
+      "expected": "SUPPRESSED",
+      "reason_code": "L2_TOOL_ALREADY_CATCHES"
+    },
+    {
+      "match": {"category": "typing"},
+      "expected": "SUPPRESSED",
+      "reason_code": "L2_TOOL_ALREADY_CATCHES"
+    },
+    {
+      "match": {"category": "lint"},
+      "expected": "SUPPRESSED",
+      "reason_code": "L2_TOOL_ALREADY_CATCHES"
+    },
+    {
+      "match": {"category": "code_quality"},
+      "expected": "SUPPRESSED",
+      "reason_code": "L2_TOOL_ALREADY_CATCHES"
+    }
+  ],
+  "metadata": {
+    "description": "Python issues that existing tools (mypy/ruff) already catch",
+    "fixture_type": "python",
+    "tools_configured": ["mypy", "ruff"],
+    "expected_behavior": "Findings about issues that tools already catch should be suppressed as redundant"
+  }
+}

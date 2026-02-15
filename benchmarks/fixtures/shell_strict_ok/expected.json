@@ -1,0 +1,13 @@
+{
+  "labels": [
+    {
+      "match": {"category": "error_handling", "file": "script.sh"},
+      "expected": "SUPPRESSED",
+      "reason_code": "L2_shell_strict_mode"
+    }
+  ],
+  "metadata": {
+    "description": "Shell script with strict mode should suppress error handling findings",
+    "fixture_type": "shell"
+  }
+}
