@@ -6,7 +6,7 @@ Pre-configured agent combinations for different review scenarios.
 
 | Preset | Agent Count | Use Case | Estimated Time |
 |--------|-------------|----------|----------------|
-| quick | 1-2 | Fast check before commit | ~30s |
+| quick | 2 | Fast check before commit | ~30s |
 | thorough | 4 | Balanced review for medium changes | ~2min |
 | comprehensive | 7 | Complete review before PR | ~5min |
 | framework | 1-2 | Framework-specific compliance | ~1min |
@@ -18,8 +18,9 @@ Pre-configured agent combinations for different review scenarios.
 
 **Agents:**
 1. feature-dev:code-reviewer - General review
+2. pr-review-toolkit:code-simplifier - Refactoring suggestions
 
-**Exit criteria:** Fast feedback on critical issues only
+**Exit criteria:** Fast feedback on critical issues and refactoring opportunities
 
 ### thorough
 **Best for:** Medium changes, feature implementation

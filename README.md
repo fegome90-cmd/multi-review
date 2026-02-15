@@ -23,18 +23,11 @@ See [DEPENDENCIES.md](DEPENDENCIES.md) for complete dependency and licensing inf
 
 ## Quick Start
 
+### Interactive Mode
+
 ```bash
 # Interactive mode (prompts for preset)
 /multi-review
-
-# Quick check - 2 agents
-/multi-review --agents quick
-
-# Thorough review - 4 agents
-/multi-review --agents thorough
-
-# Comprehensive review - 7 agents
-/multi-review --agents comprehensive
 
 # Framework-specific review
 /multi-review --agents framework
@@ -43,11 +36,44 @@ See [DEPENDENCIES.md](DEPENDENCIES.md) for complete dependency and licensing inf
 /multi-review --agents custom
 ```
 
+### Direct Slash Commands (No Questionnaire)
+
+Skip the preset selection and run immediately:
+
+```bash
+# Quick check - 2 agents (~30s)
+/mr-quick
+
+# Thorough review - 4 agents (~2min)
+/mr-thorough
+
+# Comprehensive review - 7 agents (~5min)
+/mr-comprehensive
+```
+
+### Command Equivalents
+
+| Direct Command | Equivalent To |
+|----------------|---------------|
+| `/mr-quick` | `/multi-review --agents quick` |
+| `/mr-thorough` | `/multi-review --agents thorough` |
+| `/mr-comprehensive` | `/multi-review --agents comprehensive` |
+
+### Additional Commands
+
+```bash
+# Multi-agent planning & execution
+/mr-plan
+
+# Plugin diagnostics
+/mr-doctor
+```
+
 ## Presets
 
 | Preset | Agents | Use Case |
 |--------|--------|----------|
-| quick | 1-2 | Fast check before commit |
+| quick | 2 | Fast check before commit |
 | thorough | 4 | Balanced review |
 | comprehensive | 7 | Complete review before PR |
 | framework | 1-2 | Framework-specific compliance |
@@ -174,7 +200,13 @@ multi-review/
 │   ├── marketplace.json      # Marketplace config
 │   └── hooks.json           # Hook definitions (disabled by default)
 ├── commands/
-│   └── multi-review.md      # Main slash command
+│   ├── multi-review.md      # Main interactive command
+│   ├── cm-multi-review.md   # Backward compatibility alias
+│   ├── mr-quick.md          # Quick 2-agent review
+│   ├── mr-thorough.md       # Thorough 4-agent review
+│   ├── mr-comprehensive.md  # Comprehensive 7-agent review
+│   ├── mr-plan.md           # Planning & execution (Sprint 2)
+│   └── mr-doctor.md         # Plugin diagnostics (Sprint 2)
 ├── scripts/
 │   ├── context_detector.py   # Context detection & agent suggestions
 │   ├── auto_review.py        # Post-Write handler
@@ -192,6 +224,17 @@ multi-review/
 ├── README.md                  # This file
 └── CLAUDE.md                  # Claude Code guidance
 ```
+
+## Command Reference
+
+| Command | Agents | Description |
+|---------|--------|-------------|
+| `/multi-review` | varies | Interactive review with preset selection |
+| `/mr-quick` | 2 | Fast check before commits |
+| `/mr-thorough` | 4 | Balanced review for features |
+| `/mr-comprehensive` | 7 | Complete review before PRs |
+| `/mr-plan` | - | Multi-agent planning & execution |
+| `/mr-doctor` | - | Plugin diagnostics |
 
 ## License
 

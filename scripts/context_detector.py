@@ -597,6 +597,512 @@ def detect_context() -> Dict[str, Any]:
 
 
 # =============================================================================
+# PROJECT CONTEXT DETECTION (3-Layer Defense - Layer 1)
+# =============================================================================
+
+def detect_pyproject_config(repo_root: Path) -> Dict[str, Any]:
+    """Parse pyproject.toml for Python tool configuration.
+
+    Extracts configuration from [tool.mypy], [tool.ruff], and related sections.
+    This is FACT evidence - directly parsed from config files.
+
+    Args:
+        repo_root: Path to the repository root.
+
+    Returns:
+        Dictionary with keys:
+            - mypy_strict: bool (from mypy.strict or mypy.strict_optional)
+            - mypy_configured: bool (whether [tool.mypy] exists)
+            - ruff_rules: list[str] of enabled rules
+            - type_checking_level: str ("strict", "moderate", "relaxed", "none")
+
+    Example:
+        >>> config = detect_pyproject_config(Path.cwd())
+        >>> config["mypy_strict"]
+        True
+    """
+    result = {
+        "mypy_strict": False,
+        "mypy_configured": False,
+        "ruff_rules": [],
+        "type_checking_level": "none",
+    }
+
+    pyproject_path = repo_root / "pyproject.toml"
+    if not pyproject_path.exists():
+        return result
+
+    try:
+        content = pyproject_path.read_text(encoding='utf-8')
+
+        # Simple TOML parsing without external dependencies
+        # Look for [tool.mypy] section
+        in_mypy_section = False
+        in_ruff_section = False
+
+        for line in content.split('\n'):
+            line = line.strip()
+
+            # Section detection
+            if line == "[tool.mypy]":
+                in_mypy_section = True
+                in_ruff_section = False
+                result["mypy_configured"] = True
+                continue
+            elif line == "[tool.ruff]":
+                in_ruff_section = True
+                in_mypy_section = False
+                continue
+            elif line.startswith("[") and line != "[tool.mypy]" and line != "[tool.ruff]":
+                in_mypy_section = False
+                in_ruff_section = False
+                continue
+
+            # Parse mypy config
+            if in_mypy_section:
+                if "strict" in line.lower() and "=" in line:
+                    # Check if strict mode is enabled
+                    if "true" in line.lower() or "yes" in line.lower():
+                        result["mypy_strict"] = True
+                        result["type_checking_level"] = "strict"
+                elif ("strict_optional" in line.lower() or
+                      "disallow_untyped_defs" in line.lower() or
+                      "warn_return_any" in line.lower()):
+                    if "true" in line.lower() or "yes" in line.lower():
+                        result["mypy_strict"] = True
+                        if result["type_checking_level"] == "none":
+                            result["type_checking_level"] = "moderate"
+
+            # Parse ruff config (look for select rules)
+            if in_ruff_section:
+                if "select" in line.lower() and "=" in line:
+                    # Extract rule codes like ["E", "F", "I"]
+                    import re
+                    rules_match = re.findall(r'"([A-Z]+)"', line)
+                    result["ruff_rules"].extend(rules_match)
+
+        # Deduplicate ruff rules
+        result["ruff_rules"] = sorted(set(result["ruff_rules"]))
+
+        # Infer type checking level if not set
+        if result["type_checking_level"] == "none" and result["mypy_configured"]:
+            result["type_checking_level"] = "relaxed"
+
+    except (OSError, UnicodeDecodeError) as e:
+        logger.warning(f"Failed to parse pyproject.toml: {e}")
+
+    return result
+
+
+def detect_ruff_config(repo_root: Path) -> List[str]:
+    """Parse ruff.toml or .ruff.toml for enabled rules.
+
+    Args:
+        repo_root: Path to the repository root.
+
+    Returns:
+        List of enabled ruff rule codes.
+    """
+    rules = []
+
+    for config_file in ["ruff.toml", ".ruff.toml"]:
+        config_path = repo_root / config_file
+        if not config_path.exists():
+            continue
+
+        try:
+            content = config_path.read_text(encoding='utf-8')
+            import re
+            # Look for select = [...] or extend-select = [...]
+            for line in content.split('\n'):
+                if "select" in line.lower() and "=" in line:
+                    rules_match = re.findall(r'"([A-Z]+)"', line)
+                    rules.extend(rules_match)
+        except (OSError, UnicodeDecodeError) as e:
+            logger.warning(f"Failed to parse {config_file}: {e}")
+
+    return sorted(set(rules))
+
+
+def detect_mypy_config(repo_root: Path) -> Dict[str, bool]:
+    """Parse mypy.ini or setup.cfg for mypy configuration.
+
+    Args:
+        repo_root: Path to the repository root.
+
+    Returns:
+        Dictionary with mypy configuration flags.
+    """
+    result = {"strict": False, "configured": False}
+
+    # Check mypy.ini
+    mypy_ini = repo_root / "mypy.ini"
+    setup_cfg = repo_root / "setup.cfg"
+
+    for config_path in [mypy_ini, setup_cfg]:
+        if not config_path.exists():
+            continue
+
+        try:
+            content = config_path.read_text(encoding='utf-8')
+            in_mypy_section = False
+
+            for line in content.split('\n'):
+                line = line.strip()
+
+                if config_path.name == "mypy.ini":
+                    if line == "[mypy]" or line.startswith("[mypy-"):
+                        in_mypy_section = True
+                        result["configured"] = True
+                        continue
+                else:  # setup.cfg
+                    if line == "[mypy]":
+                        in_mypy_section = True
+                        result["configured"] = True
+                        continue
+
+                if line.startswith("[") and not line.startswith("[mypy"):
+                    in_mypy_section = False
+                    continue
+
+                if in_mypy_section:
+                    if "strict" in line.lower() and "=" in line:
+                        if "true" in line.lower() or "yes" in line.lower():
+                            result["strict"] = True
+                    elif any(flag in line.lower() for flag in [
+                        "strict_optional", "disallow_untyped_defs",
+                        "warn_return_any", "disallow_any_generics"
+                    ]):
+                        if "true" in line.lower() or "yes" in line.lower():
+                            result["strict"] = True
+
+        except (OSError, UnicodeDecodeError) as e:
+            logger.warning(f"Failed to parse {config_path.name}: {e}")
+
+    return result
+
+
+def detect_shell_strict_mode(files: List[str], repo_root: Path) -> Dict[str, Any]:
+    """Detect shell scripts with strict mode enabled.
+
+    Searches for `set -euo pipefail` or equivalent patterns in shell files.
+    This is FACT evidence - directly parsed from file contents.
+
+    Args:
+        files: List of file paths to check (relative to repo_root).
+        repo_root: Path to the repository root.
+
+    Returns:
+        Dictionary with keys:
+            - strict_mode_files: set of Path objects with strict mode
+            - detection_evidence: list of "filepath:line" strings
+            - has_any_shell_scripts: bool
+
+    Example:
+        >>> result = detect_shell_strict_mode(["script.sh"], Path.cwd())
+        >>> result["strict_mode_files"]
+        {Path('script.sh')}
+    """
+    result = {
+        "strict_mode_files": set(),
+        "detection_evidence": [],
+        "has_any_shell_scripts": False,
+    }
+
+    shell_extensions = {'.sh', '.bash', '.zsh'}
+    strict_patterns = [
+        'set -euo pipefail',
+        'set -e -u -o pipefail',
+        'set -eo pipefail',
+        'set -eu pipefail',
+    ]
+
+    for file_path in files:
+        # Check if it's a shell script
+        path = Path(file_path)
+        if path.suffix not in shell_extensions:
+            continue
+
+        result["has_any_shell_scripts"] = True
+        full_path = repo_root / file_path
+
+        try:
+            content = full_path.read_text(encoding='utf-8', errors='replace')
+            for i, line in enumerate(content.split('\n'), 1):
+                # Check for strict mode patterns
+                line_stripped = line.strip()
+                if any(pattern in line_stripped for pattern in strict_patterns):
+                    result["strict_mode_files"].add(Path(file_path))
+                    result["detection_evidence"].append(f"{file_path}:{i}:{line_stripped[:50]}")
+                    break  # Only record first occurrence per file
+        except (OSError, PermissionError) as e:
+            logger.debug(f"Could not read shell file {file_path}: {e}")
+
+    return result
+
+
+def detect_result_pattern(repo_root: Path, files: List[str]) -> Dict[str, Any]:
+    """Detect if the project uses Result/Either pattern for error handling.
+
+    This is HEURISTIC evidence - inferred from import patterns.
+    The evidence field contains the actual lines that triggered detection.
+
+    Args:
+        repo_root: Path to the repository root.
+        files: List of Python files to check.
+
+    Returns:
+        Dictionary with keys:
+            - uses_result_pattern: bool
+            - evidence: list of strings showing detected imports
+
+    Example:
+        >>> result = detect_result_pattern(Path.cwd(), ["src/main.py"])
+        >>> result["uses_result_pattern"]
+        True
+        >>> result["evidence"]
+        ["src/main.py:from returns.result import Result"]
+    """
+    result = {
+        "uses_result_pattern": False,
+        "evidence": [],
+    }
+
+    result_patterns = [
+        'from returns.result import',
+        'from returns import Result',
+        'from result import Result',
+        'from either import Either',
+        'from pydantic import Result',
+        'import returns',
+    ]
+
+    python_files = [f for f in files if f.endswith('.py')]
+
+    for file_path in python_files[:50]:  # Limit to first 50 files for performance
+        full_path = repo_root / file_path
+        try:
+            content = full_path.read_text(encoding='utf-8', errors='replace')
+            for i, line in enumerate(content.split('\n'), 1):
+                line_stripped = line.strip()
+                for pattern in result_patterns:
+                    if pattern in line_stripped:
+                        result["uses_result_pattern"] = True
+                        result["evidence"].append(f"{file_path}:{i}:{line_stripped[:60]}")
+                        break
+        except (OSError, PermissionError) as e:
+            logger.debug(f"Could not read {file_path} for Result pattern detection: {e}")
+
+    return result
+
+
+def get_git_blame_authors(files: List[str], repo_root: Path) -> Dict[str, List[str]]:
+    """Get authors of lines in changed files via git blame.
+
+    This helps identify pre-existing issues (lines written by others).
+
+    Args:
+        files: List of file paths to blame.
+        repo_root: Path to the repository root.
+
+    Returns:
+        Dictionary mapping file paths to lists of author names.
+
+    Note:
+        Returns empty dict if git blame fails or is unavailable.
+    """
+    result = {}
+
+    for file_path in files[:20]:  # Limit for performance
+        try:
+            blame_result = _run_git_command(
+                ["blame", "--line-porcelain", file_path],
+                timeout=10,
+                operation=f"git blame for {file_path}"
+            )
+
+            if blame_result.returncode == 0:
+                authors = set()
+                for line in blame_result.stdout.split('\n'):
+                    if line.startswith('author '):
+                        author = line[7:].strip()
+                        if author and author != 'Not Committed Yet':
+                            authors.add(author)
+                result[file_path] = list(authors)
+        except RuntimeError as e:
+            logger.debug(f"Could not blame {file_path}: {e}")
+
+    return result
+
+
+def build_project_context(
+    repo_root: Optional[Path] = None,
+    changed_files: Optional[List[str]] = None
+) -> "ProjectContext":
+    """Build complete ProjectContext for false positive elimination.
+
+    This is the unified entry point that combines all context detection.
+    It coordinates detection of Python config, shell config, test config,
+    and git metadata into a single ProjectContext object.
+
+    Args:
+        repo_root: Path to repository root (defaults to cwd).
+        changed_files: List of changed files (defaults to git detection).
+
+    Returns:
+        ProjectContext with all configuration populated.
+
+    Example:
+        >>> context = build_project_context()
+        >>> context.python_config.mypy_strict.value
+        True
+        >>> context.to_context_hash()
+        'a1b2c3d4...'
+    """
+    from project_context import (
+        ConfigValue,
+        EvidenceLevel,
+        GitMetadata,
+        ProjectContext,
+        PythonConfig,
+        ShellConfig,
+        TestConfig,
+    )
+
+    if repo_root is None:
+        repo_root = Path.cwd()
+
+    # Get changed files from git if not provided
+    if changed_files is None:
+        try:
+            staged_result = _run_git_command(
+                ["diff", "--cached", "--name-only"],
+                operation="get staged files"
+            )
+            working_result = _run_git_command(
+                ["diff", "--name-only"],
+                operation="get working files"
+            )
+            staged = staged_result.stdout.strip().split('\n') if staged_result.stdout.strip() else []
+            working = working_result.stdout.strip().split('\n') if working_result.stdout.strip() else []
+            changed_files = [f for f in staged + working if f]
+        except RuntimeError:
+            changed_files = []
+
+    # Detect Python configuration
+    pyproject_config = detect_pyproject_config(repo_root)
+    ruff_rules = detect_ruff_config(repo_root)
+    mypy_config = detect_mypy_config(repo_root)
+
+    # Combine mypy config from all sources
+    mypy_strict = pyproject_config["mypy_strict"] or mypy_config["strict"]
+    mypy_configured = pyproject_config["mypy_configured"] or mypy_config["configured"]
+    all_ruff_rules = sorted(set(pyproject_config["ruff_rules"] + ruff_rules))
+
+    # Detect Result pattern
+    result_pattern = detect_result_pattern(repo_root, changed_files)
+
+    # Detect shell strict mode
+    shell_config = detect_shell_strict_mode(changed_files, repo_root)
+
+    # Build PythonConfig
+    python_config = PythonConfig(
+        mypy_strict=ConfigValue(
+            mypy_strict,
+            EvidenceLevel.FACT if mypy_configured else EvidenceLevel.ASSUMPTION,
+            "pyproject.toml [tool.mypy] or mypy.ini" if mypy_configured else "no mypy config found"
+        ),
+        mypy_configured=ConfigValue(
+            mypy_configured,
+            EvidenceLevel.FACT,
+            "config file present" if mypy_configured else "no config file"
+        ),
+        ruff_rules=frozenset(all_ruff_rules),
+        type_checking_level=ConfigValue(
+            pyproject_config["type_checking_level"],
+            EvidenceLevel.FACT if mypy_configured else EvidenceLevel.ASSUMPTION,
+            "from mypy config" if mypy_configured else "no type checker configured"
+        ),
+        uses_result_pattern=ConfigValue(
+            result_pattern["uses_result_pattern"],
+            EvidenceLevel.HEURISTIC if result_pattern["uses_result_pattern"] else EvidenceLevel.ASSUMPTION,
+            "detected Result imports" if result_pattern["uses_result_pattern"] else "no Result imports detected"
+        ),
+        result_pattern_evidence=frozenset(result_pattern["evidence"]),
+    )
+
+    # Build ShellConfig
+    shell_cfg = ShellConfig(
+        strict_mode_files=frozenset(shell_config["strict_mode_files"]),
+        detection_evidence=frozenset(shell_config["detection_evidence"]),
+        has_any_shell_scripts=ConfigValue(
+            shell_config["has_any_shell_scripts"],
+            EvidenceLevel.FACT,
+            "shell file extensions detected" if shell_config["has_any_shell_scripts"] else "no shell files found"
+        ),
+    )
+
+    # Build TestConfig
+    test_patterns = ["_test.py", "_tests.py", "test_", "tests/", "conftest.py"]
+    has_tests = any(
+        any(pattern in f for pattern in test_patterns)
+        for f in changed_files
+    )
+
+    test_framework = "none"
+    if has_tests:
+        # Simple heuristic for test framework detection
+        test_framework = "pytest"  # Most common assumption
+
+    test_cfg = TestConfig(
+        has_tests=ConfigValue(
+            has_tests,
+            EvidenceLevel.FACT if has_tests else EvidenceLevel.ASSUMPTION,
+            "test files detected" if has_tests else "no test files found"
+        ),
+        test_framework=ConfigValue(
+            test_framework,
+            EvidenceLevel.HEURISTIC if has_tests else EvidenceLevel.ASSUMPTION,
+            "inferred from file naming" if has_tests else "no test framework detected"
+        ),
+        coverage_tool=ConfigValue(
+            "none",
+            EvidenceLevel.ASSUMPTION,
+            "no coverage tool configured"
+        ),
+        min_coverage_threshold=ConfigValue(
+            None,
+            EvidenceLevel.ASSUMPTION,
+            "no coverage threshold configured"
+        ),
+    )
+
+    # Build GitMetadata
+    has_git = (repo_root / ".git").exists()
+    git_meta = GitMetadata(
+        has_git=ConfigValue(
+            has_git,
+            EvidenceLevel.FACT,
+            ".git directory present" if has_git else "not a git repository"
+        ),
+        main_branch=ConfigValue(
+            "main",
+            EvidenceLevel.ASSUMPTION,
+            "default assumption"
+        ),
+        pre_existing_issue_authors=frozenset(),
+        changed_files=frozenset(changed_files),
+    )
+
+    return ProjectContext(
+        python_config=python_config,
+        shell_config=shell_cfg,
+        test_config=test_cfg,
+        git_metadata=git_meta,
+    )
+
+
+# =============================================================================
 # ENVIRONMENT VALIDATION
 # =============================================================================
 
@@ -927,6 +1433,11 @@ Examples:
             action="store_true",
             help="Show detected context information"
         )
+        parser.add_argument(
+            "--context-json",
+            action="store_true",
+            help="Output ProjectContext as JSON for 3-Layer Defense filtering"
+        )
 
         args = parser.parse_args()
 
@@ -1016,6 +1527,16 @@ Examples:
                     print(f"    ... and {len(context['working_files']) - 10} more")
 
             print()
+
+        elif args.context_json:
+            # Output ProjectContext as JSON for 3-Layer Defense filtering
+            try:
+                project_ctx = build_project_context()
+                print(json.dumps(project_ctx.to_dict(), indent=2))
+            except Exception as e:
+                print(f"Error building project context: {e}", file=sys.stderr)
+                logger.error(f"Failed to build project context: {e}", exc_info=True)
+                sys.exit(1)
 
         else:
             parser.print_help()

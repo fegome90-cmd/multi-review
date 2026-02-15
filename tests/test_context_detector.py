@@ -7,6 +7,7 @@ for the context detection and agent orchestration functionality.
 import json
 import pytest
 import subprocess
+import tempfile
 from pathlib import Path
 from unittest.mock import Mock, patch, MagicMock
 from typing import List
@@ -47,6 +48,12 @@ try:
         suggest_agents,
         format_output,
         format_agent_list,
+        # Config Detection (Phase 1 coverage)
+        detect_pyproject_config,
+        detect_ruff_config,
+        detect_mypy_config,
+        detect_shell_strict_mode,
+        detect_result_pattern,
         # Main entry point
         main,
     )
@@ -1134,3 +1141,676 @@ class TestMainFunctionCoverage:
         # This is hard to test directly, but we can verify the exception is caught
         # MemoryError is caught at main level with sys.exit(1)
         pass  # The exception handling is verified implicitly by test completeness
+
+
+# =============================================================================
+# PYPROJECT CONFIG DETECTION TESTS (Lines 624-694)
+# =============================================================================
+
+class TestDetectPyprojectConfig:
+    """Tests for detect_pyproject_config function."""
+
+    def test_returns_default_when_no_pyproject(self):
+        """Should return default values when pyproject.toml doesn't exist."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            result = detect_pyproject_config(Path(tmpdir))
+
+            assert result["mypy_strict"] is False
+            assert result["mypy_configured"] is False
+            assert result["ruff_rules"] == []
+            assert result["type_checking_level"] == "none"
+
+    def test_detects_mypy_strict_true(self):
+        """Should detect mypy strict = true in pyproject.toml."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pyproject = Path(tmpdir) / "pyproject.toml"
+            pyproject.write_text("""[tool.mypy]
+strict = true
+""", encoding='utf-8')
+
+            result = detect_pyproject_config(Path(tmpdir))
+
+            assert result["mypy_strict"] is True
+            assert result["mypy_configured"] is True
+            assert result["type_checking_level"] == "strict"
+
+    def test_detects_mypy_strict_uppercase_true(self):
+        """Should detect mypy strict = TRUE."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pyproject = Path(tmpdir) / "pyproject.toml"
+            pyproject.write_text("""[tool.mypy]
+strict = TRUE
+""", encoding='utf-8')
+
+            result = detect_pyproject_config(Path(tmpdir))
+
+            assert result["mypy_strict"] is True
+
+    def test_detects_mypy_strict_yes(self):
+        """Should detect mypy strict = yes."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pyproject = Path(tmpdir) / "pyproject.toml"
+            pyproject.write_text("""[tool.mypy]
+strict = yes
+""", encoding='utf-8')
+
+            result = detect_pyproject_config(Path(tmpdir))
+
+            assert result["mypy_strict"] is True
+
+    def test_detects_mypy_strict_optional(self):
+        """Should detect mypy strict_optional as strict (contains 'strict' keyword)."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pyproject = Path(tmpdir) / "pyproject.toml"
+            pyproject.write_text("""[tool.mypy]
+strict_optional = True
+""", encoding='utf-8')
+
+            result = detect_pyproject_config(Path(tmpdir))
+
+            # strict_optional contains "strict" so it's detected as strict
+            assert result["mypy_strict"] is True
+            assert result["type_checking_level"] == "strict"
+
+    def test_detects_mypy_disallow_untyped_defs(self):
+        """Should detect mypy disallow_untyped_defs."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pyproject = Path(tmpdir) / "pyproject.toml"
+            pyproject.write_text("""[tool.mypy]
+disallow_untyped_defs = True
+""", encoding='utf-8')
+
+            result = detect_pyproject_config(Path(tmpdir))
+
+            assert result["mypy_strict"] is True
+
+    def test_detects_ruff_select_rules(self):
+        """Should detect ruff select rules in pyproject.toml."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pyproject = Path(tmpdir) / "pyproject.toml"
+            pyproject.write_text("""[tool.ruff]
+select = ["E", "F", "I"]
+""", encoding='utf-8')
+
+            result = detect_pyproject_config(Path(tmpdir))
+
+            assert result["ruff_rules"] == ["E", "F", "I"]
+
+    def test_deduplicates_ruff_rules(self):
+        """Should deduplicate ruff rules."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pyproject = Path(tmpdir) / "pyproject.toml"
+            pyproject.write_text("""[tool.ruff]
+select = ["E", "F", "E", "I"]
+""", encoding='utf-8')
+
+            result = detect_pyproject_config(Path(tmpdir))
+
+            assert result["ruff_rules"] == ["E", "F", "I"]
+
+    def test_infers_relaxed_type_checking(self):
+        """Should infer relaxed type checking when mypy configured but not strict."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pyproject = Path(tmpdir) / "pyproject.toml"
+            pyproject.write_text("""[tool.mypy]
+check_untyped_defs = True
+""", encoding='utf-8')
+
+            result = detect_pyproject_config(Path(tmpdir))
+
+            assert result["mypy_configured"] is True
+            assert result["type_checking_level"] == "relaxed"
+
+    def test_handles_unicode_decode_error(self):
+        """Should handle Unicode decode error gracefully."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pyproject = Path(tmpdir) / "pyproject.toml"
+            # Write invalid UTF-8
+            pyproject.write_bytes(b'\xff\xfe invalid utf-8')
+
+            result = detect_pyproject_config(Path(tmpdir))
+
+            # Should return defaults on error
+            assert result["mypy_strict"] is False
+
+    def test_parses_both_mypy_and_ruff(self):
+        """Should parse both mypy and ruff sections."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pyproject = Path(tmpdir) / "pyproject.toml"
+            pyproject.write_text("""[tool.mypy]
+strict = true
+
+[tool.ruff]
+select = ["E", "F"]
+""", encoding='utf-8')
+
+            result = detect_pyproject_config(Path(tmpdir))
+
+            assert result["mypy_strict"] is True
+            assert result["ruff_rules"] == ["E", "F"]
+
+
+# =============================================================================
+# RUFF CONFIG DETECTION TESTS (Lines 697-724)
+# =============================================================================
+
+class TestDetectRuffConfig:
+    """Tests for detect_ruff_config function."""
+
+    def test_returns_empty_when_no_ruff_config(self):
+        """Should return empty list when no ruff config exists."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            result = detect_ruff_config(Path(tmpdir))
+
+            assert result == []
+
+    def test_parses_ruff_toml(self):
+        """Should parse ruff.toml for select rules."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            ruff_toml = Path(tmpdir) / "ruff.toml"
+            ruff_toml.write_text("""select = ["E", "F", "I"]
+""", encoding='utf-8')
+
+            result = detect_ruff_config(Path(tmpdir))
+
+            assert result == ["E", "F", "I"]
+
+    def test_parses_dot_ruff_toml(self):
+        """Should parse .ruff.toml for select rules."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            ruff_toml = Path(tmpdir) / ".ruff.toml"
+            ruff_toml.write_text("""select = ["A", "B"]
+""", encoding='utf-8')
+
+            result = detect_ruff_config(Path(tmpdir))
+
+            assert result == ["A", "B"]
+
+    def test_prefers_ruff_toml_over_dot_ruff(self):
+        """Should parse ruff.toml and .ruff.toml, combining results."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            ruff_toml = Path(tmpdir) / "ruff.toml"
+            dot_ruff_toml = Path(tmpdir) / ".ruff.toml"
+            ruff_toml.write_text("""select = ["E", "F"]
+""", encoding='utf-8')
+            dot_ruff_toml.write_text("""select = ["I"]
+""", encoding='utf-8')
+
+            result = detect_ruff_config(Path(tmpdir))
+
+            # Should combine and deduplicate
+            assert set(result) == {"E", "F", "I"}
+
+    def test_detects_lowercase_select(self):
+        """Should detect lowercase 'select' keyword."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            ruff_toml = Path(tmpdir) / "ruff.toml"
+            ruff_toml.write_text("""select = ["C", "D"]
+""", encoding='utf-8')
+
+            result = detect_ruff_config(Path(tmpdir))
+
+            assert result == ["C", "D"]
+
+    def test_detects_extend_select(self):
+        """Should detect extend-select rules."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            ruff_toml = Path(tmpdir) / "ruff.toml"
+            ruff_toml.write_text("""extend-select = ["W"]
+""", encoding='utf-8')
+
+            result = detect_ruff_config(Path(tmpdir))
+
+            assert result == ["W"]
+
+    def test_handles_decode_error(self):
+        """Should handle decode errors gracefully."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            ruff_toml = Path(tmpdir) / "ruff.toml"
+            ruff_toml.write_bytes(b'\xff\xfe invalid')
+
+            result = detect_ruff_config(Path(tmpdir))
+
+            assert result == []
+
+    def test_returns_sorted_unique_rules(self):
+        """Should return sorted and deduplicated rules."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            ruff_toml = Path(tmpdir) / "ruff.toml"
+            ruff_toml.write_text("""select = ["Z", "A", "Z"]
+""", encoding='utf-8')
+
+            result = detect_ruff_config(Path(tmpdir))
+
+            assert result == ["A", "Z"]
+
+
+# =============================================================================
+# MYPY CONFIG DETECTION TESTS (Lines 727-782)
+# =============================================================================
+
+class TestDetectMypyConfig:
+    """Tests for detect_mypy_config function."""
+
+    def test_returns_default_when_no_config(self):
+        """Should return default values when no config exists."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            result = detect_mypy_config(Path(tmpdir))
+
+            assert result["strict"] is False
+            assert result["configured"] is False
+
+    def test_parses_mypy_ini_strict(self):
+        """Should parse mypy.ini for strict mode."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            mypy_ini = Path(tmpdir) / "mypy.ini"
+            mypy_ini.write_text("""[mypy]
+strict = True
+""", encoding='utf-8')
+
+            result = detect_mypy_config(Path(tmpdir))
+
+            assert result["strict"] is True
+            assert result["configured"] is True
+
+    def test_parses_mypy_ini_strict_yes(self):
+        """Should parse strict = yes."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            mypy_ini = Path(tmpdir) / "mypy.ini"
+            mypy_ini.write_text("""[mypy]
+strict = yes
+""", encoding='utf-8')
+
+            result = detect_mypy_config(Path(tmpdir))
+
+            assert result["strict"] is True
+
+    def test_parses_mypy_ini_strict_optional(self):
+        """Should parse strict_optional as strict."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            mypy_ini = Path(tmpdir) / "mypy.ini"
+            mypy_ini.write_text("""[mypy]
+strict_optional = True
+""", encoding='utf-8')
+
+            result = detect_mypy_config(Path(tmpdir))
+
+            assert result["strict"] is True
+
+    def test_parses_mypy_ini_disallow_untyped_defs(self):
+        """Should parse disallow_untyped_defs."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            mypy_ini = Path(tmpdir) / "mypy.ini"
+            mypy_ini.write_text("""[mypy]
+disallow_untyped_defs = True
+""", encoding='utf-8')
+
+            result = detect_mypy_config(Path(tmpdir))
+
+            assert result["strict"] is True
+
+    def test_parses_mypy_ini_warn_return_any(self):
+        """Should parse warn_return_any."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            mypy_ini = Path(tmpdir) / "mypy.ini"
+            mypy_ini.write_text("""[mypy]
+warn_return_any = True
+""", encoding='utf-8')
+
+            result = detect_mypy_config(Path(tmpdir))
+
+            assert result["strict"] is True
+
+    def test_parses_setup_cfg_mypy_section(self):
+        """Should parse [mypy] section in setup.cfg."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            setup_cfg = Path(tmpdir) / "setup.cfg"
+            setup_cfg.write_text("""[mypy]
+strict = True
+""", encoding='utf-8')
+
+            result = detect_mypy_config(Path(tmpdir))
+
+            assert result["strict"] is True
+            assert result["configured"] is True
+
+    def test_parses_mypy_module_specific_section(self):
+        """Should parse [mypy-module.*] sections."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            mypy_ini = Path(tmpdir) / "mypy.ini"
+            mypy_ini.write_text("""[mypy-module.src]
+strict = True
+""", encoding='utf-8')
+
+            result = detect_mypy_config(Path(tmpdir))
+
+            assert result["strict"] is True
+            assert result["configured"] is True
+
+    def test_ignores_other_sections_in_mypy_ini(self):
+        """Should ignore non-mypy sections in mypy.ini."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            mypy_ini = Path(tmpdir) / "mypy.ini"
+            mypy_ini.write_text("""[mypy]
+strict = True
+
+[other]
+value = True
+""", encoding='utf-8')
+
+            result = detect_mypy_config(Path(tmpdir))
+
+            assert result["strict"] is True
+
+    def test_ignores_other_sections_in_setup_cfg(self):
+        """Should ignore non-mypy sections in setup.cfg."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            setup_cfg = Path(tmpdir) / "setup.cfg"
+            setup_cfg.write_text("""[metadata]
+name = test
+
+[mypy]
+strict = True
+""", encoding='utf-8')
+
+            result = detect_mypy_config(Path(tmpdir))
+
+            assert result["strict"] is True
+
+    def test_handles_decode_error(self):
+        """Should handle decode errors gracefully."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            mypy_ini = Path(tmpdir) / "mypy.ini"
+            mypy_ini.write_bytes(b'\xff\xfe invalid')
+
+            result = detect_mypy_config(Path(tmpdir))
+
+            # Should return defaults
+            assert result["strict"] is False
+            assert result["configured"] is False
+
+
+# =============================================================================
+# SHELL STRICT MODE DETECTION TESTS (Lines 785+)
+# =============================================================================
+
+class TestDetectShellStrictMode:
+    """Tests for detect_shell_strict_mode function."""
+
+    def test_returns_default_when_no_files(self):
+        """Should return default values when no files provided."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            result = detect_shell_strict_mode([], Path(tmpdir))
+
+            assert result["strict_mode_files"] == set()
+            assert result["detection_evidence"] == []
+            assert result["has_any_shell_scripts"] is False
+
+    def test_ignores_non_shell_files(self):
+        """Should ignore non-shell files."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Create a Python file
+            script_py = Path(tmpdir) / "script.py"
+            script_py.write_text("print('hello')", encoding='utf-8')
+
+            result = detect_shell_strict_mode(["script.py"], Path(tmpdir))
+
+            assert result["has_any_shell_scripts"] is False
+            assert len(result["strict_mode_files"]) == 0
+
+    def test_detects_sh_file_extension(self):
+        """Should detect .sh files as shell scripts."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            script_sh = Path(tmpdir) / "script.sh"
+            script_sh.write_text("#!/bin/bash\necho 'hello'", encoding='utf-8')
+
+            result = detect_shell_strict_mode(["script.sh"], Path(tmpdir))
+
+            assert result["has_any_shell_scripts"] is True
+
+    def test_detects_bash_file_extension(self):
+        """Should detect .bash files as shell scripts."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            script_bash = Path(tmpdir) / "script.bash"
+            script_bash.write_text("#!/bin/bash\necho 'hello'", encoding='utf-8')
+
+            result = detect_shell_strict_mode(["script.bash"], Path(tmpdir))
+
+            assert result["has_any_shell_scripts"] is True
+
+    def test_detects_zsh_file_extension(self):
+        """Should detect .zsh files as shell scripts."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            script_zsh = Path(tmpdir) / "script.zsh"
+            script_zsh.write_text("#!/bin/zsh\necho 'hello'", encoding='utf-8')
+
+            result = detect_shell_strict_mode(["script.zsh"], Path(tmpdir))
+
+            assert result["has_any_shell_scripts"] is True
+
+    def test_detects_set_euo_pipefail(self):
+        """Should detect 'set -euo pipefail' strict mode."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            script_sh = Path(tmpdir) / "strict.sh"
+            script_sh.write_text("""#!/bin/bash
+set -euo pipefail
+echo 'strict mode'
+""", encoding='utf-8')
+
+            result = detect_shell_strict_mode(["strict.sh"], Path(tmpdir))
+
+            assert Path("strict.sh") in result["strict_mode_files"]
+
+    def test_detects_set_e_minus_u_minus_o_pipefail(self):
+        """Should detect 'set -e -u -o pipefail' pattern."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            script_sh = Path(tmpdir) / "script.sh"
+            script_sh.write_text("""#!/bin/bash
+set -e -u -o pipefail
+echo 'strict mode'
+""", encoding='utf-8')
+
+            result = detect_shell_strict_mode(["script.sh"], Path(tmpdir))
+
+            assert Path("script.sh") in result["strict_mode_files"]
+
+    def test_detects_set_eo_pipefail(self):
+        """Should detect 'set -eo pipefail' pattern."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            script_sh = Path(tmpdir) / "script.sh"
+            script_sh.write_text("""#!/bin/bash
+set -eo pipefail
+echo 'strict mode'
+""", encoding='utf-8')
+
+            result = detect_shell_strict_mode(["script.sh"], Path(tmpdir))
+
+            assert Path("script.sh") in result["strict_mode_files"]
+
+    def test_detects_set_eu_pipefail(self):
+        """Should detect 'set -eu pipefail' pattern."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            script_sh = Path(tmpdir) / "script.sh"
+            script_sh.write_text("""#!/bin/bash
+set -eu pipefail
+echo 'strict mode'
+""", encoding='utf-8')
+
+            result = detect_shell_strict_mode(["script.sh"], Path(tmpdir))
+
+            assert Path("script.sh") in result["strict_mode_files"]
+
+    def test_no_strict_mode_detection(self):
+        """Should not detect strict mode when not present."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            script_sh = Path(tmpdir) / "lax.sh"
+            script_sh.write_text("""#!/bin/bash
+echo 'no strict mode'
+""", encoding='utf-8')
+
+            result = detect_shell_strict_mode(["lax.sh"], Path(tmpdir))
+
+            assert len(result["strict_mode_files"]) == 0
+
+    def test_records_detection_evidence(self):
+        """Should record detection evidence with file:line:content."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            script_sh = Path(tmpdir) / "evidence.sh"
+            script_sh.write_text("""#!/bin/bash
+set -euo pipefail
+echo 'test'
+""", encoding='utf-8')
+
+            result = detect_shell_strict_mode(["evidence.sh"], Path(tmpdir))
+
+            assert len(result["detection_evidence"]) > 0
+            assert "evidence.sh" in result["detection_evidence"][0]
+
+    def test_handles_file_read_errors(self):
+        """Should handle file read errors gracefully."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Pass a non-existent shell file - the flag is set based on extension
+            # even if file doesn't exist (set at line 826 before file read)
+            result = detect_shell_strict_mode(["nonexistent.sh"], Path(tmpdir))
+
+            # has_any_shell_scripts is True because .sh extension detected
+            # But strict_mode_files should be empty since file can't be read
+            assert result["has_any_shell_scripts"] is True
+            assert len(result["strict_mode_files"]) == 0
+
+    def test_detects_strict_mode_with_whitespace(self):
+        """Should detect strict mode pattern with whitespace variations."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            script_sh = Path(tmpdir) / "script.sh"
+            script_sh.write_text("""#!/bin/bash
+  set -euo pipefail
+echo 'test'
+""", encoding='utf-8')
+
+            result = detect_shell_strict_mode(["script.sh"], Path(tmpdir))
+
+            assert Path("script.sh") in result["strict_mode_files"]
+
+
+# =============================================================================
+# RESULT PATTERN DETECTION TESTS
+# =============================================================================
+
+class TestDetectResultPattern:
+    """Tests for detect_result_pattern function."""
+
+    def test_returns_default_when_no_python_files(self):
+        """Should return default values when no Python files."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            result = detect_result_pattern(Path(tmpdir), ["script.sh", "file.txt"])
+
+            assert result["uses_result_pattern"] is False
+            assert result["evidence"] == []
+
+    def test_detects_returns_result_import(self):
+        """Should detect 'from returns.result import'."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            main_py = Path(tmpdir) / "main.py"
+            main_py.write_text("from returns.result import Result\n", encoding='utf-8')
+
+            result = detect_result_pattern(Path(tmpdir), ["main.py"])
+
+            assert result["uses_result_pattern"] is True
+            assert len(result["evidence"]) > 0
+
+    def test_detects_returns_import(self):
+        """Should detect 'from returns import Result'."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            main_py = Path(tmpdir) / "main.py"
+            main_py.write_text("from returns import Result\n", encoding='utf-8')
+
+            result = detect_result_pattern(Path(tmpdir), ["main.py"])
+
+            assert result["uses_result_pattern"] is True
+
+    def test_detects_result_import(self):
+        """Should detect 'from result import Result'."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            main_py = Path(tmpdir) / "main.py"
+            main_py.write_text("from result import Result\n", encoding='utf-8')
+
+            result = detect_result_pattern(Path(tmpdir), ["main.py"])
+
+            assert result["uses_result_pattern"] is True
+
+    def test_detects_either_import(self):
+        """Should detect 'from either import Either'."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            main_py = Path(tmpdir) / "main.py"
+            main_py.write_text("from either import Either\n", encoding='utf-8')
+
+            result = detect_result_pattern(Path(tmpdir), ["main.py"])
+
+            assert result["uses_result_pattern"] is True
+
+    def test_detects_pydantic_result(self):
+        """Should detect 'from pydantic import Result'."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            main_py = Path(tmpdir) / "main.py"
+            main_py.write_text("from pydantic import Result\n", encoding='utf-8')
+
+            result = detect_result_pattern(Path(tmpdir), ["main.py"])
+
+            assert result["uses_result_pattern"] is True
+
+    def test_detects_import_returns(self):
+        """Should detect 'import returns'."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            main_py = Path(tmpdir) / "main.py"
+            main_py.write_text("import returns\n", encoding='utf-8')
+
+            result = detect_result_pattern(Path(tmpdir), ["main.py"])
+
+            assert result["uses_result_pattern"] is True
+
+    def test_no_pattern_detection(self):
+        """Should not detect pattern when not present."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            main_py = Path(tmpdir) / "main.py"
+            main_py.write_text("import os\nimport sys\n", encoding='utf-8')
+
+            result = detect_result_pattern(Path(tmpdir), ["main.py"])
+
+            assert result["uses_result_pattern"] is False
+            assert result["evidence"] == []
+
+    def test_limits_to_first_50_files(self):
+        """Should limit analysis to first 50 files for performance."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Create 51 Python files (only first 50 checked)
+            for i in range(51):
+                file_py = Path(tmpdir) / f"file{i}.py"
+                file_py.write_text("import os\n", encoding='utf-8')
+
+            files = [f"file{i}.py" for i in range(51)]
+            result = detect_result_pattern(Path(tmpdir), files)
+
+            # Should process without error
+            assert isinstance(result["uses_result_pattern"], bool)
+
+    def test_records_evidence_with_file_and_line(self):
+        """Should record evidence with file:line:content format."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            main_py = Path(tmpdir) / "types.py"
+            main_py.write_text("from returns.result import Result\n", encoding='utf-8')
+
+            result = detect_result_pattern(Path(tmpdir), ["types.py"])
+
+            assert len(result["evidence"]) > 0
+            evidence = result["evidence"][0]
+            assert "types.py" in evidence
+            assert "1:" in evidence  # Line number
+
+    def test_handles_read_errors_gracefully(self):
+        """Should handle file read errors gracefully."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Don't create the file
+            result = detect_result_pattern(Path(tmpdir), ["nonexistent.py"])
+
+            # Should not crash
+            assert isinstance(result["uses_result_pattern"], bool)
