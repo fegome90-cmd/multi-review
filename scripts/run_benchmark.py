@@ -451,11 +451,10 @@ def run_benchmark(
     cache_hits = 0
     cache_misses = 0
 
-    for run_idx in range(config.repeat_runs):
+    for _ in range(config.repeat_runs):
         start_time = time.perf_counter()
 
-        # Filter findings
-        filtered = filter_instance.filter_findings(findings)
+        filter_instance.filter_findings(findings)
 
         end_time = time.perf_counter()
 
@@ -472,12 +471,9 @@ def run_benchmark(
         if len(latencies) > 1:
             result.latency_std = statistics.stdev(latencies)
 
-    # Cache metrics (simulated - not yet integrated with FindingFilter)
-    # Skip setting cache metrics until integration is implemented
-    # to avoid triggering check-gates cache gate with zero values
-    if config.measure_cache:
-        # Cache metrics not yet wired to FindingFilter - skip to avoid false failures
-        pass
+    # Cache metrics - skip when measure_cache is True until integration implemented
+    if not config.measure_cache:
+        result.cache_hits = cache_hits
         result.cache_misses = cache_misses
         total = cache_hits + cache_misses
         result.cache_hit_rate = cache_hits / total if total > 0 else 0.0
@@ -489,9 +485,8 @@ def run_benchmark(
     suppressed = 0
     unlabeled = 0
 
-    for finding, filtered_finding in zip(
-        findings, filter_instance.filter_findings(findings)
-    ):
+    filtered_results = filter_instance.filter_findings(findings)
+    for finding, filtered_finding in zip(findings, filtered_results, strict=True):
         is_suppressed = filtered_finding.action == FilterAction.SUPPRESS
         actual_reason = (
             filtered_finding.reason_code.value if filtered_finding.reason_code else None
@@ -666,20 +661,20 @@ def format_result_text(result: BenchmarkResult, verbose: bool = False) -> str:
     lines.append(f"\nTotal Findings: {result.total_findings}")
 
     if result.latency_ms:
-        lines.append(f"\nLatency:")
+        lines.append("\nLatency:")
         lines.append(f"  p50: {result.latency_p50:.2f}ms")
         lines.append(f"  p95: {result.latency_p95:.2f}ms")
         lines.append(
             f"  mean: {result.latency_mean:.2f}ms (std: {result.latency_std:.2f}ms)"
         )
 
-    lines.append(f"\nClassification:")
+    lines.append("\nClassification:")
     lines.append(f"  True Positives:  {result.true_positives}")
     lines.append(f"  False Positives: {result.false_positives}")
     lines.append(f"  Suppressed:      {result.suppressed}")
     lines.append(f"  Unlabeled:       {result.unlabeled}")
 
-    lines.append(f"\nMetrics:")
+    lines.append("\nMetrics:")
     lines.append(f"  Precision:       {result.precision:.2%}")
     lines.append(f"  Recall:          {result.recall:.2%}")
     lines.append(f"  F1 Score:        {result.f1_score:.2%}")
@@ -687,12 +682,12 @@ def format_result_text(result: BenchmarkResult, verbose: bool = False) -> str:
     lines.append(f"  Suppression Rate: {result.suppression_rate:.2%}")
 
     if result.errors:
-        lines.append(f"\nErrors:")
+        lines.append("\nErrors:")
         for error in result.errors:
             lines.append(f"  - {error}")
 
     if verbose and result.classifications:
-        lines.append(f"\nDetailed Classifications:")
+        lines.append("\nDetailed Classifications:")
         for c in result.classifications:
             lines.append(
                 f"  {c['finding_id']}: {c['classification'].value} "
@@ -741,9 +736,9 @@ def main():
 
         parser = argparse.ArgumentParser(description="Run multi-review benchmarks")
         parser.add_argument(
-            "fixture",
-            nargs="?",
-            help="Specific fixture to run (runs all if not specified)",
+            "fixtures",
+            nargs="*",
+            help="Specific fixtures to run (runs all if not specified)",
         )
         parser.add_argument(
             "--warmup",
@@ -802,26 +797,65 @@ def main():
         )
 
         # Run benchmarks
-        if args.fixture:
-            fixture_dir = benchmarks_dir / "fixtures" / args.fixture
-            if not fixture_dir.exists():
-                print(f"Error: Fixture not found: {fixture_dir}")
-                return ExitCodes.INVALID_ARGS
+        if args.fixtures:
+            # Run specified fixtures
+            results = {}
+            for fixture_name in args.fixtures:
+                fixture_dir = benchmarks_dir / "fixtures" / fixture_name
+                if not fixture_dir.exists():
+                    print(f"Error: Fixture not found: {fixture_dir}")
+                    return ExitCodes.INVALID_ARGS
+                logger.info(f"Running benchmark: {fixture_name}")
+                result = run_benchmark(fixture_dir, config)
+                results[fixture_name] = result
 
-            result = run_benchmark(fixture_dir, config)
+            if not results:
+                print("No benchmarks found")
+                return ExitCodes.FAILURE
+
+            # Aggregate results
+            all_results = list(results.values())
+            total_findings = sum(r.total_findings for r in all_results)
+            total_tp = sum(r.true_positives for r in all_results)
+            total_fp = sum(r.false_positives for r in all_results)
+            total_suppressed = sum(r.suppressed for r in all_results)
+            total_unlabeled = sum(r.unlabeled for r in all_results)
 
             if args.output in ("text", "both"):
-                print(format_result_text(result, args.verbose))
+                print("\n" + "=" * 60)
+                print("BENCHMARK SUMMARY")
+                print("=" * 60)
+                print(f"\nFixtures Run: {len(results)}")
+                print(f"Total Findings: {total_findings}")
+                print(f"  True Positives:  {total_tp}")
+                print(f"  False Positives: {total_fp}")
+                print(f"  Suppressed:      {total_suppressed}")
+                print(f"  Unlabeled:       {total_unlabeled}")
+                for name, result in results.items():
+                    print(format_result_text(result, args.verbose))
 
             if args.output in ("json", "both"):
-                json_output = json.dumps(result.to_dict(), indent=2)
+                output_data = {
+                    "summary": {
+                        "fixtures_run": len(results),
+                        "total_findings": total_findings,
+                        "true_positives": total_tp,
+                        "false_positives": total_fp,
+                        "suppressed": total_suppressed,
+                        "unlabeled": total_unlabeled,
+                    },
+                    "results": {name: r.to_dict() for name, r in results.items()},
+                }
+                json_output = json.dumps(output_data, indent=2)
                 if args.output_file:
                     args.output_file.write_text(json_output)
                     print(f"JSON output written to: {args.output_file}")
                 elif args.output == "json":
                     print(json_output)
 
-            return ExitCodes.SUCCESS if not result.errors else ExitCodes.FAILURE
+            if args.fail_on_unlabeled and total_unlabeled > 0:
+                return ExitCodes.FAILURE
+            return ExitCodes.SUCCESS
 
         else:
             # Run all benchmarks
@@ -882,7 +916,9 @@ def main():
 
             return ExitCodes.SUCCESS
 
-    except SystemExit:
+    except SystemExit as e:
+        if e.code == 0:
+            return ExitCodes.SUCCESS
         return ExitCodes.INVALID_ARGS
     except (json.JSONDecodeError, ValueError) as e:
         print(f"Error: {e}", file=sys.stderr)

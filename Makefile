@@ -40,19 +40,17 @@ test:
 test-fast:
 	$(VENV) pytest $(TESTS_DIR)/ -v --tb=short
 
-# Run quick benchmark (specific fixtures)
+# Run quick benchmark (specific fixtures, combined into single output)
 .PHONY: bench-quick
 bench-quick:
 	@mkdir -p $(RESULTS_DIR)
-	$(VENV) python $(SCRIPTS_DIR)/run_benchmark.py shell_strict_ok --output-file $(RESULTS_DIR)/latest.json
-	$(VENV) python $(SCRIPTS_DIR)/run_benchmark.py python_style_nitpick --output-file $(RESULTS_DIR)/latest.json
-	$(VENV) python $(SCRIPTS_DIR)/run_benchmark.py python_ruff_strict --output-file $(RESULTS_DIR)/latest.json
+	$(VENV) python $(SCRIPTS_DIR)/run_benchmark.py shell_strict_ok python_style_nitpick python_ruff_strict --output json --output-file $(RESULTS_DIR)/latest.json
 
 # Run full benchmark (all fixtures)
 .PHONY: bench-full
 bench-full:
 	@mkdir -p $(RESULTS_DIR)
-	$(VENV) python $(SCRIPTS_DIR)/run_benchmark.py --output-file $(RESULTS_DIR)/latest.json
+	$(VENV) python $(SCRIPTS_DIR)/run_benchmark.py --output json --output-file $(RESULTS_DIR)/latest.json
 
 # Check gates
 .PHONY: check-gates

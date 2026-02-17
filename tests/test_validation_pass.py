@@ -45,6 +45,8 @@ class TestEvidence:
 
     def test_evidence_immutability(self):
         """Test evidence is immutable."""
+        from dataclasses import FrozenInstanceError
+
         evidence = Evidence(
             source="test",
             file="test.py",
@@ -53,7 +55,7 @@ class TestEvidence:
             severity="warning",
         )
 
-        with pytest.raises(Exception):
+        with pytest.raises(FrozenInstanceError):
             evidence.line = 2
 
     def test_matches_finding_same_file_line(self):

@@ -261,7 +261,7 @@ class ReviewEnvelope:
                 reason_code_value = str(reason_code)
 
         result = {
-            "action": getattr(filtered, "action", {}).value
+            "action": filtered.action.value
             if hasattr(filtered, "action")
             else "unknown",
             "reason": getattr(filtered, "reason", ""),
@@ -311,12 +311,14 @@ class ReviewEnvelope:
         findings = []
         for f_data in data.get("findings", []):
             if isinstance(f_data, dict):
-                # Convert evidence_refs back to frozenset if needed
-                if "evidence_refs" in f_data and isinstance(
-                    f_data["evidence_refs"], list
+                finding_data = f_data.copy()
+                if "evidence_refs" in finding_data and isinstance(
+                    finding_data["evidence_refs"], list
                 ):
-                    f_data["evidence_refs"] = frozenset(f_data["evidence_refs"])
-                findings.append(Finding(**f_data))
+                    finding_data["evidence_refs"] = frozenset(
+                        finding_data["evidence_refs"]
+                    )
+                findings.append(Finding(**finding_data))
 
         # Parse suppressed
         suppressed = []
@@ -334,13 +336,16 @@ class ReviewEnvelope:
                 reason_code = None
                 if s_data.get("reason_code") is not None:
                     reason_code_value = s_data["reason_code"]
-                    # Handle both string and enum value formats
                     if isinstance(reason_code_value, str):
                         try:
                             reason_code = SuppressionReasonCode(reason_code_value)
                         except ValueError:
-                            # If not a valid enum, store as-is (will be handled by caller)
-                            reason_code = reason_code_value
+                            import logging
+
+                            logging.getLogger(__name__).warning(
+                                f"Unknown reason_code value '{reason_code_value}', setting to None"
+                            )
+                            reason_code = None
                     else:
                         reason_code = reason_code_value
 

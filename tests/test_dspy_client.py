@@ -587,19 +587,10 @@ class TestDSPyClientRefreshAPI:
             yield Path(tmpdir)
 
     @patch.dict("sys.modules", {"requests": None})
-    def test_refresh_from_api_without_requests(self, mock_import, temp_cache_dir):
+    def test_refresh_from_api_without_requests(self, temp_cache_dir):
         """Test refresh_from_api returns None when requests not available."""
         client = DSPyClient(cache_dir=temp_cache_dir)
         mock_context = MagicMock()
-        result = client.refresh_from_api("test-agent", mock_context)
-        assert result is None
-
-    @patch.dict("sys.modules", {"requests": None})
-    def test_refresh_from_api_no_requests_module(self, temp_cache_dir):
-        """Test refresh_from_api when requests module is not available."""
-        client = DSPyClient(cache_dir=temp_cache_dir)
-        mock_context = MagicMock()
-        # When requests is None, returns None early
         result = client.refresh_from_api("test-agent", mock_context)
         assert result is None
 

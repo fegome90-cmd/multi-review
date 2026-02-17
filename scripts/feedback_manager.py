@@ -93,7 +93,6 @@ class FeedbackEntry:
     confidence: int = 50
 
     def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary for JSON serialization."""
         return {
             "feedback_id": self.feedback_id,
             "timestamp": self.timestamp,
@@ -105,11 +104,12 @@ class FeedbackEntry:
             "source_agent": self.source_agent,
             "feedback_type": self.feedback_type.value,
             "reason": self.reason,
+            "severity": self.severity,
+            "confidence": self.confidence,
         }
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "FeedbackEntry":
-        """Create from dictionary."""
         return cls(
             feedback_id=data["feedback_id"],
             timestamp=data["timestamp"],
@@ -121,6 +121,8 @@ class FeedbackEntry:
             source_agent=data["source_agent"],
             feedback_type=FeedbackType(data["feedback_type"]),
             reason=data.get("reason"),
+            severity=data.get("severity", "Low"),
+            confidence=data.get("confidence", 50),
         )
 
 
@@ -310,7 +312,7 @@ class FeedbackManager:
         self._save_feedback_entry(entry)
 
         # Update aggregate calibration
-        self._update_aggregate_calibration(entry, severity, confidence)
+        self._update_aggregate_calibration(entry)
 
         # Invalidate cache
         self._calibration_cache = None
@@ -323,13 +325,7 @@ class FeedbackManager:
         return entry
 
     def _save_feedback_entry(self, entry: FeedbackEntry) -> None:
-        """Save a feedback entry to disk.
-
-        Args:
-            entry: The feedback entry to save.
-        """
-        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-        filename = f"feedback_{timestamp}.json"
+        filename = f"feedback_{entry.feedback_id}.json"
         filepath = self.feedback_dir / filename
 
         try:
@@ -337,21 +333,9 @@ class FeedbackManager:
                 json.dump(entry.to_dict(), f, indent=2)
             logger.debug(f"Saved feedback entry to {filepath}")
         except OSError as e:
-            logger.error(f"Failed to save feedback entry: {e}")
+            logger.exception(f"Failed to save feedback entry: {e}")
 
-    def _update_aggregate_calibration(
-        self,
-        entry: FeedbackEntry,
-        severity: str,
-        confidence: int,
-    ) -> None:
-        """Update aggregate calibration with new feedback.
-
-        Args:
-            entry: The feedback entry.
-            severity: Finding severity.
-            confidence: Finding confidence.
-        """
+    def _update_aggregate_calibration(self, entry: FeedbackEntry) -> None:
         calibration = self._load_calibration_internal()
 
         # Get or create agent calibration
@@ -523,17 +507,12 @@ class FeedbackManager:
         return calibration
 
     def _save_calibration(self, calibration: Dict[str, Any]) -> None:
-        """Save calibration data to disk.
-
-        Args:
-            calibration: Calibration dictionary to save.
-        """
         try:
             with open(self.calibration_file, "w", encoding="utf-8") as f:
                 json.dump(calibration, f, indent=2)
             logger.debug(f"Saved calibration to {self.calibration_file}")
         except OSError as e:
-            logger.error(f"Failed to save calibration: {e}")
+            logger.exception(f"Failed to save calibration: {e}")
 
     def get_agent_calibration(self, agent_name: str) -> AgentCalibration:
         """Get calibration for a specific agent.
