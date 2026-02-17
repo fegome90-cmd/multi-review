@@ -258,7 +258,7 @@ class FeedbackManager:
         Returns:
             Unique feedback ID.
         """
-        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
         hash_input = f"{finding_id}:{timestamp}"
         short_hash = hashlib.sha256(hash_input.encode()).hexdigest()[:6]
         return f"fb-{timestamp}-{short_hash}"
@@ -332,8 +332,8 @@ class FeedbackManager:
             with open(filepath, "w", encoding="utf-8") as f:
                 json.dump(entry.to_dict(), f, indent=2)
             logger.debug(f"Saved feedback entry to {filepath}")
-        except OSError as e:
-            logger.exception(f"Failed to save feedback entry: {e}")
+        except OSError:
+            logger.exception("Failed to save feedback entry")
 
     def _update_aggregate_calibration(self, entry: FeedbackEntry) -> None:
         calibration = self._load_calibration_internal()
@@ -363,12 +363,12 @@ class FeedbackManager:
             agent_cal["not_actionable"] = agent_cal.get("not_actionable", 0) + 1
 
         # Recalculate confidence adjustment
-        total = agent_cal["total_findings"]
-        real = agent_cal["real_issues"]
-        fp = agent_cal["false_positives"]
-        # Adjustment: boost if accurate, reduce if many FPs
+        total = agent_cal.get("total_findings", 0)
+        real = agent_cal.get("real_issues", 0)
+        fp = agent_cal.get("false_positives", 0)
+        denominator = max(1e-6, total - fp * 0.5)
         agent_cal["confidence_adjustment"] = max(
-            0.5, min(1.0, (real + 0.5) / (total - fp * 0.5))
+            0.5, min(1.0, (real + 0.5) / denominator)
         )
 
         agent_calibrations[entry.source_agent] = agent_cal
@@ -511,8 +511,8 @@ class FeedbackManager:
             with open(self.calibration_file, "w", encoding="utf-8") as f:
                 json.dump(calibration, f, indent=2)
             logger.debug(f"Saved calibration to {self.calibration_file}")
-        except OSError as e:
-            logger.exception(f"Failed to save calibration: {e}")
+        except OSError:
+            logger.exception("Failed to save calibration")
 
     def get_agent_calibration(self, agent_name: str) -> AgentCalibration:
         """Get calibration for a specific agent.

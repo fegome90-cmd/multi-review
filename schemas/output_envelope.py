@@ -22,7 +22,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, FrozenSet, List, Optional
+from typing import Any, Dict, List, Optional
 
 
 class DegradationLevel(Enum):
@@ -223,18 +223,15 @@ class ReviewEnvelope:
             from dataclasses import asdict
 
             result = asdict(finding)
-            # Convert frozenset to sorted list for JSON serialization
             if "evidence_refs" in result and isinstance(
                 result["evidence_refs"], frozenset
             ):
                 result["evidence_refs"] = sorted(result["evidence_refs"])
-            return result
         except TypeError:
-            # Not a dataclass, use manual extraction
             refs = getattr(finding, "evidence_refs", [])
             if isinstance(refs, frozenset):
                 refs = sorted(refs)
-            return {
+            result = {
                 "id": getattr(finding, "id", ""),
                 "file": getattr(finding, "file", ""),
                 "line": getattr(finding, "line", 0),
@@ -246,6 +243,7 @@ class ReviewEnvelope:
                 "evidence_refs": list(refs) if not isinstance(refs, list) else refs,
                 "source_agent": getattr(finding, "source_agent", "unknown"),
             }
+        return result
 
     def _filtered_finding_to_dict(self, filtered: Any) -> Dict[str, Any]:
         """Convert a FilteredFinding to dictionary."""
@@ -294,12 +292,12 @@ class ReviewEnvelope:
         Returns:
             ReviewEnvelope instance.
         """
-        # Import here to avoid circular dependency
-        # Add scripts directory to path for reliable imports
         import sys
         from pathlib import Path
 
-        sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
+        scripts_path = str(Path(__file__).parent.parent / "scripts")
+        if scripts_path not in sys.path:
+            sys.path.insert(0, scripts_path)
         from finding_filter import (
             Finding,
             FilteredFinding,
@@ -325,6 +323,11 @@ class ReviewEnvelope:
         for s_data in data.get("suppressed", []):
             if isinstance(s_data, dict):
                 finding_data = s_data.get("finding", {})
+                if not finding_data:
+                    continue
+                finding_data = (
+                    finding_data.copy() if isinstance(finding_data, dict) else {}
+                )
                 if "evidence_refs" in finding_data and isinstance(
                     finding_data["evidence_refs"], list
                 ):
@@ -346,12 +349,19 @@ class ReviewEnvelope:
                                 f"Unknown reason_code value '{reason_code_value}', setting to None"
                             )
                             reason_code = None
-                    else:
+                    elif hasattr(reason_code_value, "value"):
                         reason_code = reason_code_value
+                    else:
+                        import logging
+
+                        logging.getLogger(__name__).warning(
+                            f"Invalid reason_code type {type(reason_code_value)}, setting to None"
+                        )
+                        reason_code = None
 
                 suppressed.append(
                     FilteredFinding(
-                        finding=Finding(**finding_data) if finding_data else None,
+                        finding=Finding(**finding_data),
                         action=FilterAction(s_data.get("action", "set_confidence")),
                         reason=s_data.get("reason", ""),
                         filtered_confidence=s_data.get("filtered_confidence", 0),

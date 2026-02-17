@@ -13,12 +13,6 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-# Import requests for mocking if available
-try:
-    import requests
-except ImportError:
-    requests = None  # type: ignore
-
 # Add scripts to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
@@ -563,13 +557,12 @@ class TestDSPyClientCacheErrors:
 
         def mock_glob(pattern):
             for path in original_glob(pattern):
-                # Create a mock that raises PermissionError
                 mock_path = MagicMock()
                 mock_path.unlink.side_effect = PermissionError("Denied")
                 mock_path.name = path.name
                 yield mock_path
 
-        with patch.object(Path, "glob", lambda self, p: mock_glob(p)):
+        with patch.object(client.cache_dir, "glob", mock_glob):
             # Should not crash, just log warning
             count = client.clear_cache()
 

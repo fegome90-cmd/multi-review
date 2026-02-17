@@ -81,7 +81,7 @@ all: test lint bench-quick check-gates
 clean:
 	rm -rf .pytest_cache/ .mypy_cache/ .ruff_cache/
 	rm -f coverage.xml .coverage
-	rm -rf $(RESULTS_DIR)/*.json
+	rm -f $(RESULTS_DIR)/*.json
 
 # Install development dependencies
 .PHONY: install-dev

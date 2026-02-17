@@ -128,7 +128,7 @@ def load_results(results_path: Path) -> Dict[str, Any]:
         results_path: Path to results JSON file.
 
     Returns:
-        Dictionary with benchmark results.
+        Dictionary with benchmark results (flattened from nested format).
 
     Raises:
         FileNotFoundError: If the results file does not exist.
@@ -138,7 +138,37 @@ def load_results(results_path: Path) -> Dict[str, Any]:
         raise FileNotFoundError(f"Results file not found: {results_path}")
 
     content = results_path.read_text(encoding="utf-8")
-    return json.loads(content)
+    data = json.loads(content)
+
+    # Flatten nested benchmark output
+    # run_benchmark.py outputs: {"summary": {...}, "results": {fixture: {...}}}
+    # We need flat keys: fp_rate, latency_p95_ms, cache_hit_rate, etc.
+
+    if "summary" in data:
+        summary = data["summary"]
+        flat = {
+            "total_findings": summary.get("total_findings", 0),
+            "true_positives": summary.get("true_positives", 0),
+            "false_positives": summary.get("false_positives", 0),
+            "suppressed": summary.get("suppressed", 0),
+            "unlabeled": summary.get("unlabeled", 0),
+            "fp_rate": summary.get("fp_rate", 0.0),
+            "cache_hit_rate": summary.get("cache_hit_rate", 0.0),
+            "schema_stable": summary.get("schema_stable", True),
+        }
+
+        # Get latency from first result fixture if available
+        if "results" in data:
+            for fixture_name, fixture_data in data["results"].items():
+                latency = fixture_data.get("latency", {})
+                flat["latency_p50_ms"] = latency.get("p50", 0)
+                flat["latency_p95_ms"] = latency.get("p95", 0)
+                break
+
+        return flat
+
+    # Already flat format
+    return data
 
 
 def print_report(

@@ -466,12 +466,12 @@ def run_benchmark(
         if len(latencies) > 1:
             result.latency_std = statistics.stdev(latencies)
 
-    # Cache metrics - skip when measure_cache is True until integration implemented
-    if not config.measure_cache:
-        result.cache_hits = cache_hits
-        result.cache_misses = cache_misses
-        total = cache_hits + cache_misses
-        result.cache_hit_rate = cache_hits / total if total > 0 else 0.0
+    if config.measure_cache:
+        total_cache = cache_hits + cache_misses
+        if total_cache > 0:
+            result.cache_hits = cache_hits
+            result.cache_misses = cache_misses
+            result.cache_hit_rate = cache_hits / total_cache
 
     # Classify findings
     classifications = []
@@ -549,8 +549,8 @@ def _create_context_from_fixture(fixture: FixtureData) -> "ProjectContext":
                     content = sf.read_text()
                     if "set -euo pipefail" in content or "set -eu" in content:
                         strict_mode_files = strict_mode_files | {sf.name}
-                except Exception:
-                    pass
+                except (OSError, IOError, UnicodeDecodeError) as e:
+                    logger.warning(f"Could not read {sf.name}: {e}")
 
     shell_config = ShellConfig(
         strict_mode_files=strict_mode_files,

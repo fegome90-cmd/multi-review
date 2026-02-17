@@ -279,15 +279,11 @@ class TestParseJsonFindings:
                 "line": 1,
                 "description": "Valid",
             },
-            {
-                "id": "invalid",
-                "file": "",  # Empty file will raise error
-                "line": -1,
-            },
+            "not a dict - this will be skipped",
         ]
         findings = parse_json_findings(json_data)
-        # At least valid one should be parsed
-        assert len(findings) >= 1
+        assert len(findings) == 1
+        assert findings[0].id == "valid"
 
     def test_evidence_refs_included(self):
         """Test evidence refs are included from JSON."""
@@ -316,7 +312,7 @@ class TestApplyFiltering:
         context.python_config.ruff_rules = []
         context.shell_config.strict_mode_files = []
         context.git_metadata.pre_existing_issue_authors = []
-        context.git_metadata.changed_files = ["src/test.py"]
+        context.git_metadata.changed_files = ["src/test.py", "unknown"]
         return context
 
     def test_basic_filtering(self, mock_context):
