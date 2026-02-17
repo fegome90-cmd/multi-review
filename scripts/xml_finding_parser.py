@@ -199,7 +199,8 @@ def _parse_single_finding(
     Returns:
         Finding object, or None if parsing fails.
     """
-    if "<!DOCTYPE" in xml_str or "<!ENTITY" in xml_str:
+    xml_lower = xml_str.lower()
+    if "<!doctype" in xml_lower or "<!entity" in xml_lower:
         raise ET.ParseError("XML with DTD/ENTITY declarations not allowed for security")
 
     try:

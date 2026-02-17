@@ -754,7 +754,7 @@ class TestMainCLI:
         ):
             with pytest.raises(SystemExit) as exc:
                 main()
-            assert exc.value.code == 1
+            assert exc.value.code == 3
 
     def test_main_exits_gracefully_on_no_findings(self, temp_files):
         """Test main exits gracefully when no findings."""

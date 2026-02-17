@@ -442,6 +442,9 @@ def run_benchmark(
 
     # Measurement runs
     latencies = []
+    # TODO: Cache metrics integration pending - FindingFilter.filter_findings() does not
+    # expose cache hit/miss counters. When integrated, increment cache_hits/cache_misses
+    # in the loop below based on filter_instance cache activity.
     cache_hits = 0
     cache_misses = 0
 
@@ -825,7 +828,7 @@ def main():
                 print(f"  False Positives: {total_fp}")
                 print(f"  Suppressed:      {total_suppressed}")
                 print(f"  Unlabeled:       {total_unlabeled}")
-                for name, result in results.items():
+                for _name, result in results.items():
                     print(format_result_text(result, args.verbose))
 
             if args.output in ("json", "both"):

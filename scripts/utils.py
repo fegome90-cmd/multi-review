@@ -34,10 +34,14 @@ class ExitCodes:
         FAILURE: General failure or issues found (1)
         INVALID_ARGS: Invalid command-line arguments (2)
         CONFIG_ERROR: Configuration or setup error (3)
+        ERROR: Runtime/operational error (4)
     """
+
     SUCCESS = 0
     FAILURE = 1
     INVALID_ARGS = 2
+    CONFIG_ERROR = 3
+    ERROR = 4
     CONFIG_ERROR = 3
 
 
@@ -70,9 +74,7 @@ def generate_timestamp() -> str:
 
 
 def save_report(
-    report_data: Dict[str, Any],
-    report_type: str,
-    prefix: str = "review"
+    report_data: Dict[str, Any], report_type: str, prefix: str = "review"
 ) -> Optional[Path]:
     """Save a report to the reports directory.
 
@@ -111,10 +113,7 @@ def save_report(
 
 
 def format_report_summary(
-    preset: str,
-    agents: List[str],
-    issues_found: int = 0,
-    critical_count: int = 0
+    preset: str, agents: List[str], issues_found: int = 0, critical_count: int = 0
 ) -> Dict[str, Any]:
     """Format a standard report summary dictionary.
 
@@ -139,7 +138,7 @@ def log_review_summary(
     preset: str,
     agents: List[str],
     issues_found: int = 0,
-    report_path: Optional[Path] = None
+    report_path: Optional[Path] = None,
 ) -> None:
     """Log a standardized review summary.
 

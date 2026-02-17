@@ -423,12 +423,12 @@ def classify_finding_with_details(
 
             if expected == Classification.SUPPRESSED:
                 if is_suppressed:
-                    result["classification"] = Classification.SUPPRESSED
-                    # Check if reason codes match
                     if label.reason_code and actual_reason_code:
-                        result["reason_match"] = (
-                            label.reason_code.lower() == actual_reason_code.lower()
-                        )
+                        if label.reason_code.lower() != actual_reason_code.lower():
+                            result["reason_match"] = False
+                            continue
+                    result["classification"] = Classification.SUPPRESSED
+                    result["reason_match"] = True
                 else:
                     result["classification"] = Classification.FP
             elif expected == Classification.TP:

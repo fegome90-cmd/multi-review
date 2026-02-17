@@ -32,8 +32,7 @@ import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
-from typing import TYPE_CHECKING
+from typing import Any, Dict, List, Optional, Tuple, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from project_context import ProjectContext
@@ -573,7 +572,7 @@ def detect_context() -> Dict[str, Any]:
             "_test.ts",
             ".test.ts",
             ".spec.ts",
-            "__tests__.py",
+            "__tests__/",
             "tests/",
         ]
         context["has_tests"] = any(
@@ -854,7 +853,7 @@ def detect_shell_strict_mode(files: List[str], repo_root: Path) -> Dict[str, Any
         "set -euo pipefail",
         "set -e -u -o pipefail",
         "set -eo pipefail",
-        "set -eu pipefail",
+        "set -eu -o pipefail",
     ]
 
     for file_path in files:

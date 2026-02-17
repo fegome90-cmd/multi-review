@@ -323,7 +323,7 @@ def main() -> int:
     if not results.get("success"):
         if args.silent:
             print(json.dumps({"error": results.get("error")}))
-        return ExitCodes.FAILURE
+        return ExitCodes.ERROR
 
     # Save report
     report_path = save_report(results, context)

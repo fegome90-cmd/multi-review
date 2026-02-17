@@ -95,7 +95,9 @@ def check_cache_hit_rate(results: Dict[str, Any], gates: Dict[str, Any]) -> Gate
 def check_schema_stability(
     results: Dict[str, Any], gates: Dict[str, Any]
 ) -> GateResult:
-    schema_stable = results.get("schema_stable", True)
+    schema_stable = results.get(
+        "schema_stable", results.get("summary", {}).get("schema_stable", False)
+    )
     passed = schema_stable == gates["schema_stability"]
 
     return GateResult(

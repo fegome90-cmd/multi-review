@@ -66,6 +66,6 @@
 ## Key Invariants
 
 1. Zero external dependencies in scripts
-2. Backward compatibility for CLI interfaces
+2. Backward compatibility for CLIs
 3. ExitCodes constants for all exit points
 4. TYPE_CHECKING imports for forward references

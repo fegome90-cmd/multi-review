@@ -47,7 +47,7 @@ class TestGetSessionFiles:
         assert all(isinstance(f, Path) for f in files)
         assert files[0] == Path("src/main.py")
 
-    @patch("subprocess.run")
+    @patch("session_review.subprocess.run")
     def test_returns_empty_list_when_context_file_missing(self, mock_run):
         """Should return empty list when context file doesn't exist."""
         mock_run.return_value = Mock(stdout="", returncode=0)
@@ -275,7 +275,7 @@ class TestMain:
     @patch("session_review.get_session_files")
     @patch("session_review.run_session_review")
     @patch("session_review.save_session_report")
-    def test_returns_zero_even_with_no_files(self, mock_save, mock_run, mock_files):
+    def test_returns_zero_even_with_no_files(self, _mock_save, mock_run, mock_files):
         """Should return 0 when no files in session."""
         mock_files.return_value = []
         mock_run.return_value = {
