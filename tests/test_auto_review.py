@@ -264,7 +264,7 @@ class TestRunWithExplicitPreset:
         assert result["preset"] == "comprehensive"
 
     @patch("auto_review.subprocess.run")
-    def test_run_agents_with_quick_preset(self, mock_run, temp_file):
+    def test_run_agents_with_quick_preset(self, mock_run):
         """Should use quick preset when explicitly provided."""
         mock_result = MagicMock()
         mock_result.returncode = 0
@@ -274,14 +274,13 @@ class TestRunWithExplicitPreset:
         mock_run.return_value = mock_result
 
         context = {"line_count": 1000, "has_tests": False, "has_types": False}
-        # Even for large files, should use quick if explicitly provided
         result = run_review_agents(context, silent=True, preset="quick")
 
         assert result["success"] is True
         assert result["preset"] == "quick"
 
     @patch("auto_review.subprocess.run")
-    def test_run_agents_auto_selection_when_no_preset(self, mock_run, temp_file):
+    def test_run_agents_auto_selection_when_no_preset(self, mock_run):
         """Should auto-select preset when none is provided."""
         mock_result = MagicMock()
         mock_result.returncode = 0
@@ -290,7 +289,6 @@ class TestRunWithExplicitPreset:
         )
         mock_run.return_value = mock_result
 
-        # Small file should auto-select quick
         context = {"line_count": 30, "has_tests": False, "has_types": False}
         result = run_review_agents(context, silent=True, preset=None)
 
@@ -298,9 +296,7 @@ class TestRunWithExplicitPreset:
         assert result["preset"] == "quick"
 
     @patch("auto_review.subprocess.run")
-    def test_run_agents_auto_selects_thorough_for_medium_files(
-        self, mock_run, temp_file
-    ):
+    def test_run_agents_auto_selects_thorough_for_medium_files(self, mock_run):
         """Should auto-select thorough preset for medium-sized files."""
         mock_result = MagicMock()
         mock_result.returncode = 0
@@ -309,7 +305,6 @@ class TestRunWithExplicitPreset:
         )
         mock_run.return_value = mock_result
 
-        # Medium file should auto-select thorough
         context = {"line_count": 150, "has_tests": False, "has_types": False}
         result = run_review_agents(context, silent=True, preset=None)
 
@@ -317,9 +312,7 @@ class TestRunWithExplicitPreset:
         assert result["preset"] == "thorough"
 
     @patch("auto_review.subprocess.run")
-    def test_run_agents_auto_selects_comprehensive_for_large_files(
-        self, mock_run, temp_file
-    ):
+    def test_run_agents_auto_selects_comprehensive_for_large_files(self, mock_run):
         """Should auto-select comprehensive preset for large files."""
         mock_result = MagicMock()
         mock_result.returncode = 0
@@ -328,7 +321,6 @@ class TestRunWithExplicitPreset:
         )
         mock_run.return_value = mock_result
 
-        # Large file should auto-select comprehensive
         context = {"line_count": 1000, "has_tests": False, "has_types": False}
         result = run_review_agents(context, silent=True, preset=None)
 
@@ -339,7 +331,7 @@ class TestRunWithExplicitPreset:
 class TestPresetSelection:
     """Tests for preset selection logic."""
 
-    def test_small_change_uses_quick_preset(self, temp_file):
+    def test_small_change_uses_quick_preset(self):
         """Small changes (< 50 lines) should use quick preset."""
         pass
 

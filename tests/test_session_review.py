@@ -63,19 +63,16 @@ class TestGetSessionFiles:
         # Falls back to git status - may return files in actual git repo
         assert isinstance(files, list)
 
-    @patch("subprocess.run")
     def test_handles_invalid_json_in_context_file(self, tmp_path):
         """Should handle gracefully when context file has invalid JSON."""
         context_file = tmp_path / "context.json"
         context_file.write_text("invalid json content")
 
-        # Mock git to return empty list (no fallback results)
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = Mock(stdout="", returncode=0)
 
             files = get_session_files(context_file=context_file)
 
-            # Should return empty list on parse error
             assert files == []
 
     def test_falls_back_to_git_status(self, tmp_path):

@@ -17,6 +17,7 @@ from typing import FrozenSet, List, Optional
 
 # Add scripts to path for imports
 import sys
+
 sys.path.insert(0, str(Path(__file__).parent))
 
 from finding_filter import Finding
@@ -50,6 +51,7 @@ Multiple findings can be wrapped in <findings>...</findings> or appear as siblin
 # HELPER FUNCTIONS
 # =============================================================================
 
+
 def _extract_xml_blocks(text: str) -> List[str]:
     """Extract XML finding blocks from mixed text.
 
@@ -65,8 +67,7 @@ def _extract_xml_blocks(text: str) -> List[str]:
 
     # Pattern for individual <finding>...</finding> blocks
     finding_pattern = re.compile(
-        r'<finding[^>]*>.*?</finding>',
-        re.DOTALL | re.IGNORECASE
+        r"<finding[^>]*>.*?</finding>", re.DOTALL | re.IGNORECASE
     )
 
     for match in finding_pattern.finditer(text):
@@ -114,11 +115,11 @@ def _parse_confidence(value: Optional[str]) -> int:
     except (ValueError, TypeError):
         # Try word-based confidence
         word_map = {
-            'certain': 100,
-            'high': 75,
-            'medium': 50,
-            'low': 25,
-            'none': 0,
+            "certain": 100,
+            "high": 75,
+            "medium": 50,
+            "low": 25,
+            "none": 0,
         }
         for word, score in word_map.items():
             if word in value.lower():
@@ -140,16 +141,16 @@ def _parse_severity(value: Optional[str]) -> str:
         return "Low"
 
     severity_map = {
-        'critical': 'Critical',
-        'important': 'Important',
-        'high': 'Important',
-        'medium': 'Important',
-        'low': 'Low',
-        'suggestion': 'Low',
-        'info': 'Low',
+        "critical": "Critical",
+        "important": "Important",
+        "high": "Important",
+        "medium": "Important",
+        "low": "Low",
+        "suggestion": "Low",
+        "info": "Low",
     }
 
-    return severity_map.get(value.lower(), 'Low')
+    return severity_map.get(value.lower(), "Low")
 
 
 def _parse_evidence_refs(element: Optional[ET.Element]) -> FrozenSet[str]:
@@ -166,12 +167,12 @@ def _parse_evidence_refs(element: Optional[ET.Element]) -> FrozenSet[str]:
     if element is None:
         return frozenset()
 
-    evidence_elem = element.find('evidence')
+    evidence_elem = element.find("evidence")
     if evidence_elem is not None:
-        for ref in evidence_elem.findall('ref'):
+        for ref in evidence_elem.findall("ref"):
             if ref.text:
                 # Include tool attribute if present
-                tool = ref.get('tool', '')
+                tool = ref.get("tool", "")
                 if tool:
                     refs.add(f"{tool}: {ref.text.strip()}")
                 else:
@@ -184,7 +185,10 @@ def _parse_evidence_refs(element: Optional[ET.Element]) -> FrozenSet[str]:
 # MAIN PARSING FUNCTIONS
 # =============================================================================
 
-def _parse_single_finding(xml_str: str, agent_name: str, finding_num: int) -> Optional[Finding]:
+
+def _parse_single_finding(
+    xml_str: str, agent_name: str, finding_num: int
+) -> Optional[Finding]:
     """Parse a single <finding> XML block into a Finding object.
 
     Args:
@@ -195,20 +199,23 @@ def _parse_single_finding(xml_str: str, agent_name: str, finding_num: int) -> Op
     Returns:
         Finding object, or None if parsing fails.
     """
+    if "<!DOCTYPE" in xml_str or "<!ENTITY" in xml_str:
+        raise ET.ParseError("XML with DTD/ENTITY declarations not allowed for security")
+
     try:
         root = ET.fromstring(xml_str)
 
         # Get attributes
-        finding_id = root.get('id', str(finding_num))
-        confidence = _parse_confidence(root.get('confidence'))
-        severity = _parse_severity(root.get('severity'))
+        finding_id = root.get("id", str(finding_num))
+        confidence = _parse_confidence(root.get("confidence"))
+        severity = _parse_severity(root.get("severity"))
 
         # Get child elements
-        file_path = _get_text(root, 'file', 'unknown')
-        line_str = _get_text(root, 'line', '0')
-        category = _get_text(root, 'category', 'general')
-        description = _get_text(root, 'description', '')
-        suggested_fix = _get_text(root, 'suggested_fix') or None
+        file_path = _get_text(root, "file", "unknown")
+        line_str = _get_text(root, "line", "0")
+        category = _get_text(root, "category", "general")
+        description = _get_text(root, "description", "")
+        suggested_fix = _get_text(root, "suggested_fix") or None
 
         # Parse line number
         try:
@@ -220,7 +227,7 @@ def _parse_single_finding(xml_str: str, agent_name: str, finding_num: int) -> Op
         evidence_refs = _parse_evidence_refs(root)
 
         # Add agent to evidence refs if not present
-        if agent_name not in evidence_refs and agent_name != 'unknown':
+        if agent_name not in evidence_refs and agent_name != "unknown":
             evidence_refs = evidence_refs | {agent_name}
 
         return Finding(

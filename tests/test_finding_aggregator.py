@@ -735,14 +735,11 @@ class TestMainCLI:
                 "markdown",
             ],
         ):
-            try:
+            with pytest.raises(SystemExit) as e:
                 main()
-            except SystemExit as e:
-                if e.code != 0:
-                    raise
+            assert e.value.code == 0
 
         captured = capsys.readouterr()
-        # Should output markdown
         assert "# Code Review Summary" in captured.out or "No findings" in captured.out
 
     def test_main_exits_on_missing_context(self):

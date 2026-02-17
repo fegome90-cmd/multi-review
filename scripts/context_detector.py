@@ -156,9 +156,9 @@ def _run_git_command(
             f"Install from https://git-scm.com/"
         )
     except PermissionError as e:
-        raise RuntimeError(f"{operation} failed: Permission denied: {e}")
+        raise RuntimeError(f"{operation} failed: Permission denied: {e}") from e
     except OSError as e:
-        raise RuntimeError(f"{operation} failed: {e}")
+        raise RuntimeError(f"{operation} failed: {e}") from e
     # Don't catch Exception here - let specific errors propagate
 
 
@@ -208,7 +208,7 @@ def _run_gh_command(
             f"gh command timed out after {timeout} seconds. Check network connectivity."
         )
     except OSError as e:
-        raise RuntimeError(f"gh command failed: {e}")
+        raise RuntimeError(f"gh command failed: {e}") from e
 
 
 # =============================================================================
@@ -712,9 +712,6 @@ def detect_pyproject_config(repo_root: Path) -> Dict[str, Any]:
             # Parse ruff config (look for select rules)
             if in_ruff_section:
                 if "select" in line.lower() and "=" in line:
-                    # Extract rule codes like ["E", "F", "I"]
-                    import re
-
                     rules_match = re.findall(r'"([A-Z]+)"', line)
                     result["ruff_rules"].extend(rules_match)
 

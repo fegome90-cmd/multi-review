@@ -21,7 +21,7 @@ import re
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Pattern
+from typing import Any, Dict, List, Optional
 
 
 class Classification(Enum):
@@ -33,6 +33,7 @@ class Classification(Enum):
         SUPPRESSED: Finding was correctly suppressed by filter
         UNLABELED: No matching label found in expected.json
     """
+
     TP = "TP"
     FP = "FP"
     SUPPRESSED = "SUPPRESSED"
@@ -56,6 +57,7 @@ class MatchCriteria:
         line_min: Minimum line number.
         line_max: Maximum line number.
     """
+
     category: Optional[str] = None
     file: Optional[str] = None
     severity: Optional[str] = None
@@ -71,9 +73,14 @@ class MatchCriteria:
             raise ValueError(f"confidence_min must be 0-100, got {self.confidence_min}")
         if self.confidence_max is not None and not 0 <= self.confidence_max <= 100:
             raise ValueError(f"confidence_max must be 0-100, got {self.confidence_max}")
-        if (self.confidence_min is not None and self.confidence_max is not None and
-            self.confidence_min > self.confidence_max):
-            raise ValueError(f"confidence_min ({self.confidence_min}) > confidence_max ({self.confidence_max})")
+        if (
+            self.confidence_min is not None
+            and self.confidence_max is not None
+            and self.confidence_min > self.confidence_max
+        ):
+            raise ValueError(
+                f"confidence_min ({self.confidence_min}) > confidence_max ({self.confidence_max})"
+            )
 
 
 @dataclass(frozen=True)
@@ -86,6 +93,7 @@ class ExpectedLabel:
         reason_code: Expected reason code for suppression.
         note: Optional note explaining the expectation.
     """
+
     match: MatchCriteria
     expected: Classification
     reason_code: Optional[str] = None
@@ -102,6 +110,7 @@ class MatcherConfig:
         case_sensitive_category: Whether categories are case-sensitive.
         description_pattern_type: 'regex' or 'glob' for description patterns.
     """
+
     line_tolerance: int = 2
     case_sensitive_file: bool = True
     case_sensitive_category: bool = False
@@ -112,10 +121,10 @@ class MatcherConfig:
 # PATTERN MATCHING FUNCTIONS
 # =============================================================================
 
+
 def compile_description_pattern(
-    pattern: str,
-    pattern_type: str = "regex"
-) -> Pattern[str]:
+    pattern: str, pattern_type: str = "regex"
+) -> re.Pattern[str]:
     """Compile a description pattern for matching.
 
     Args:
@@ -135,9 +144,7 @@ def compile_description_pattern(
 
 
 def match_category(
-    finding_category: str,
-    pattern: str,
-    case_sensitive: bool = False
+    finding_category: str, pattern: str, case_sensitive: bool = False
 ) -> bool:
     """Match finding category against pattern.
 
@@ -166,11 +173,7 @@ def match_category(
     return normalized_finding == normalized_pattern
 
 
-def match_file(
-    finding_file: str,
-    pattern: str,
-    case_sensitive: bool = True
-) -> bool:
+def match_file(finding_file: str, pattern: str, case_sensitive: bool = True) -> bool:
     """Match finding file against pattern.
 
     Supports glob patterns (e.g., "src/**/*.py").
@@ -196,9 +199,7 @@ def match_file(
 
 
 def match_description(
-    finding_description: str,
-    pattern: str,
-    pattern_type: str = "regex"
+    finding_description: str, pattern: str, pattern_type: str = "regex"
 ) -> bool:
     """Match finding description against pattern.
 
@@ -221,7 +222,7 @@ def match_description(
 def match_confidence(
     finding_confidence: int,
     min_confidence: Optional[int],
-    max_confidence: Optional[int]
+    max_confidence: Optional[int],
 ) -> bool:
     """Check if finding confidence is within range.
 
@@ -244,10 +245,9 @@ def match_confidence(
 # MAIN MATCHER FUNCTIONS
 # =============================================================================
 
+
 def match_finding_to_label(
-    finding: "Finding",
-    label: ExpectedLabel,
-    config: Optional[MatcherConfig] = None
+    finding: "Finding", label: ExpectedLabel, config: Optional[MatcherConfig] = None
 ) -> bool:
     """Check if a finding matches a label's criteria.
 
@@ -282,19 +282,13 @@ def match_finding_to_label(
     # Check category
     if criteria.category is not None:
         if not match_category(
-            finding.category,
-            criteria.category,
-            config.case_sensitive_category
+            finding.category, criteria.category, config.case_sensitive_category
         ):
             return False
 
     # Check file
     if criteria.file is not None:
-        if not match_file(
-            finding.file,
-            criteria.file,
-            config.case_sensitive_file
-        ):
+        if not match_file(finding.file, criteria.file, config.case_sensitive_file):
             return False
 
     # Check severity
@@ -304,9 +298,7 @@ def match_finding_to_label(
 
     # Check confidence range
     if not match_confidence(
-        finding.confidence,
-        criteria.confidence_min,
-        criteria.confidence_max
+        finding.confidence, criteria.confidence_min, criteria.confidence_max
     ):
         return False
 
@@ -315,7 +307,7 @@ def match_finding_to_label(
         if not match_description(
             finding.description,
             criteria.description_pattern,
-            config.description_pattern_type
+            config.description_pattern_type,
         ):
             return False
 
@@ -333,7 +325,7 @@ def classify_finding(
     labels: List[ExpectedLabel],
     config: Optional[MatcherConfig] = None,
     is_suppressed: bool = False,
-    actual_reason_code: Optional[str] = None
+    actual_reason_code: Optional[str] = None,
 ) -> Classification:
     """Classify a finding based on expected labels.
 
@@ -360,32 +352,28 @@ def classify_finding(
     """
     config = config or MatcherConfig()
 
-    # Find first matching label
     for label in labels:
         if match_finding_to_label(finding, label, config):
             expected = label.expected
 
-            # If we expect SUPPRESSED and it was suppressed, that's correct
             if expected == Classification.SUPPRESSED:
                 if is_suppressed:
+                    if label.reason_code and actual_reason_code:
+                        if label.reason_code.lower() != actual_reason_code.lower():
+                            continue
                     return Classification.SUPPRESSED
-                # Expected suppression but not suppressed = FP
                 return Classification.FP
 
-            # If we expect TP and it wasn't suppressed
             if expected == Classification.TP:
                 if not is_suppressed:
                     return Classification.TP
-                # Expected TP but was suppressed = FP (over-suppression)
                 return Classification.FP
 
-            # If we expect FP and it wasn't suppressed
             if expected == Classification.FP:
                 return Classification.FP
 
             return expected
 
-    # No matching label found
     return Classification.UNLABELED
 
 
@@ -394,7 +382,7 @@ def classify_finding_with_details(
     labels: List[ExpectedLabel],
     config: Optional[MatcherConfig] = None,
     is_suppressed: bool = False,
-    actual_reason_code: Optional[str] = None
+    actual_reason_code: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Classify a finding and return detailed results.
 
@@ -460,6 +448,7 @@ def classify_finding_with_details(
 # LABEL LOADING FROM JSON
 # =============================================================================
 
+
 def load_expected_labels_from_dict(data: Dict[str, Any]) -> List[ExpectedLabel]:
     """Load expected labels from a dictionary (parsed JSON).
 
@@ -520,9 +509,8 @@ def load_expected_labels_from_dict(data: Dict[str, Any]) -> List[ExpectedLabel]:
 # UTILITY FUNCTIONS
 # =============================================================================
 
-def get_classification_stats(
-    classifications: List[Classification]
-) -> Dict[str, int]:
+
+def get_classification_stats(classifications: List[Classification]) -> Dict[str, int]:
     """Get statistics from a list of classifications.
 
     Args:
@@ -546,9 +534,7 @@ def get_classification_stats(
 
 
 def calculate_metrics(
-    true_positives: int,
-    false_positives: int,
-    total_expected: int
+    true_positives: int, false_positives: int, total_expected: int
 ) -> Dict[str, float]:
     """Calculate precision, recall, and F1 score.
 
@@ -560,9 +546,17 @@ def calculate_metrics(
     Returns:
         Dictionary with precision, recall, F1, and accuracy.
     """
-    precision = true_positives / (true_positives + false_positives) if (true_positives + false_positives) > 0 else 0.0
+    precision = (
+        true_positives / (true_positives + false_positives)
+        if (true_positives + false_positives) > 0
+        else 0.0
+    )
     recall = true_positives / total_expected if total_expected > 0 else 0.0
-    f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0.0
+    f1 = (
+        2 * (precision * recall) / (precision + recall)
+        if (precision + recall) > 0
+        else 0.0
+    )
 
     return {
         "precision": round(precision, 4),
@@ -604,9 +598,7 @@ if __name__ == "__main__":
 
     # Test classification
     result = classify_finding_with_details(
-        finding, [label],
-        is_suppressed=True,
-        actual_reason_code="L2_SHELL_STRICT_MODE"
+        finding, [label], is_suppressed=True, actual_reason_code="L2_SHELL_STRICT_MODE"
     )
     print(f"Classification: {result['classification'].value}")
     print(f"Reason match: {result['reason_match']}")

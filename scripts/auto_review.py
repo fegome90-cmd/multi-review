@@ -28,9 +28,6 @@ from typing import Any, Dict, Optional
 
 # Import shared utilities
 from utils import (
-    EXIT_SUCCESS,
-    EXIT_ISSUES_FOUND,
-    EXIT_ERROR,
     ExitCodes,
     count_lines_safely,
     save_report as save_report_to_file,
@@ -40,10 +37,7 @@ from utils import (
 from context_detector import AGENT_PRESETS
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='[%(levelname)s] %(message)s'
-)
+logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -52,12 +46,15 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 
 # Valid preset names for validation
-VALID_PRESETS: frozenset[str] = frozenset(["quick", "thorough", "comprehensive", "framework"])
+VALID_PRESETS: frozenset[str] = frozenset(
+    ["quick", "thorough", "comprehensive", "framework"]
+)
 
 
 # =============================================================================
 # VALIDATION FUNCTIONS
 # =============================================================================
+
 
 def validate_preset(preset: Optional[str]) -> None:
     """Validate that preset name is valid.
@@ -80,9 +77,7 @@ def validate_preset(preset: Optional[str]) -> None:
         )
 
     if not isinstance(preset, str):
-        raise TypeError(
-            f"Preset must be a string or None, got {type(preset).__name__}"
-        )
+        raise TypeError(f"Preset must be a string or None, got {type(preset).__name__}")
 
     # Check for empty string
     if not preset:
@@ -100,10 +95,8 @@ def validate_preset(preset: Optional[str]) -> None:
 
     # Validate against valid presets
     if preset not in VALID_PRESETS:
-        valid_list = ', '.join(sorted(VALID_PRESETS))
-        raise ValueError(
-            f"Invalid preset: '{preset}'. Valid presets are: {valid_list}"
-        )
+        valid_list = ", ".join(sorted(VALID_PRESETS))
+        raise ValueError(f"Invalid preset: '{preset}'. Valid presets are: {valid_list}")
 
 
 def detect_review_context(file_path: Optional[Path] = None) -> Dict[str, Any]:
@@ -133,8 +126,12 @@ def detect_review_context(file_path: Optional[Path] = None) -> Dict[str, Any]:
 
         # Check for test/type files
         name_lower = file_path.name.lower()
-        context["has_tests"] = any(p in name_lower for p in ["_test.", ".test.", ".spec.", "__tests__"])
-        context["has_types"] = any(p in name_lower for p in ["_types.", ".d.ts", "types."])
+        context["has_tests"] = any(
+            p in name_lower for p in ["_test.", ".test.", ".spec.", "__tests__"]
+        )
+        context["has_types"] = any(
+            p in name_lower for p in ["_types.", ".d.ts", "types."]
+        )
 
     return context
 
@@ -180,9 +177,7 @@ def should_skip_review(context: Dict[str, Any]) -> tuple[bool, str]:
 
 
 def run_review_agents(
-    context: Dict[str, Any],
-    silent: bool = False,
-    preset: Optional[str] = None
+    context: Dict[str, Any], silent: bool = False, preset: Optional[str] = None
 ) -> Dict[str, Any]:
     """Run appropriate review agents based on context.
 
@@ -281,9 +276,7 @@ def main() -> int:
     Returns:
         Exit code (0=success, 1=issues, 2=error, 3=type errors).
     """
-    parser = argparse.ArgumentParser(
-        description="Post-Write automated code review"
-    )
+    parser = argparse.ArgumentParser(description="Post-Write automated code review")
     parser.add_argument(
         "--file",
         type=Path,
@@ -294,7 +287,7 @@ def main() -> int:
         type=str,
         default=None,
         help="Review preset to use (overrides auto-selection). "
-             f"Valid presets: {', '.join(sorted(VALID_PRESETS))}",
+        f"Valid presets: {', '.join(sorted(VALID_PRESETS))}",
     )
     parser.add_argument(
         "--silent",
@@ -319,7 +312,7 @@ def main() -> int:
     should_skip, reason = should_skip_review(context)
     if should_skip:
         logger.debug(f"Skipping review: {reason}")
-        return EXIT_SUCCESS
+        return ExitCodes.SUCCESS
 
     if not args.silent:
         logger.info(f"Running auto-review for: {context['file_path']}")
@@ -330,7 +323,7 @@ def main() -> int:
     if not results.get("success"):
         if args.silent:
             print(json.dumps({"error": results.get("error")}))
-        return EXIT_ERROR
+        return ExitCodes.FAILURE
 
     # Save report
     report_path = save_report(results, context)
@@ -339,24 +332,28 @@ def main() -> int:
 
     # Output results
     if args.silent:
-        print(json.dumps({
-            "preset": results.get("preset"),
-            "agents": results.get("agents", []),
-            "issues_found": results.get("issues_found", 0),
-            "critical_count": results.get("critical_count", 0),
-            "report": str(report_path) if report_path else None,
-        }))
+        print(
+            json.dumps(
+                {
+                    "preset": results.get("preset"),
+                    "agents": results.get("agents", []),
+                    "issues_found": results.get("issues_found", 0),
+                    "critical_count": results.get("critical_count", 0),
+                    "report": str(report_path) if report_path else None,
+                }
+            )
+        )
     else:
         logger.info(f"Preset: {results.get('preset')}")
         logger.info(f"Agents: {', '.join(results.get('agents', []))}")
 
         if results.get("issues_found", 0) > 0:
             logger.warning(f"Issues found: {results['issues_found']}")
-            return EXIT_ISSUES_FOUND
+            return ExitCodes.FAILURE
 
         logger.info("No issues found")
 
-    return EXIT_SUCCESS
+    return ExitCodes.SUCCESS
 
 
 if __name__ == "__main__":

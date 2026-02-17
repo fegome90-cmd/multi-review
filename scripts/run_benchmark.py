@@ -301,9 +301,8 @@ def _generate_shell_findings(
     lines = content.split("\n")
 
     for i, line in enumerate(lines, 1):
-        # Check for potential error handling issues
         if "command" in line.lower() or "$(" in line:
-            if "set -euo" not in content:  # Only if strict mode not present
+            if "set -euo pipefail" not in content and "set -eu" not in content:
                 findings.append(
                     Finding(
                         id=f"shell-{finding_id}",

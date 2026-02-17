@@ -34,6 +34,7 @@ from finding_filter import (
     FilteredFinding,
 )
 from project_context import ProjectContext
+from utils import ExitCodes
 from validation_pass import ValidationPass, ValidationMode
 from xml_finding_parser import parse_xml_findings, has_xml_findings
 
@@ -249,9 +250,13 @@ def parse_json_findings(findings_json: List[Dict[str, Any]]) -> List[Finding]:
     findings = []
 
     for i, f in enumerate(findings_json):
+        if not isinstance(f, dict):
+            logger.warning(
+                f"Skipping non-dict finding at index {i}: {type(f).__name__}"
+            )
+            continue
         try:
             source_agent = f.get("source_agent", "unknown")
-            # Use source_agent as evidence_ref if not explicitly provided
             evidence_refs = f.get(
                 "evidence_refs", [source_agent] if source_agent != "unknown" else []
             )
@@ -267,7 +272,7 @@ def parse_json_findings(findings_json: List[Dict[str, Any]]) -> List[Finding]:
                 source_agent=source_agent,
             )
             findings.append(finding)
-        except (ValueError, TypeError) as e:
+        except (ValueError, TypeError, AttributeError) as e:
             logger.warning(f"Skipping invalid finding: {e}")
             continue
 
@@ -473,7 +478,7 @@ def main() -> None:
         context = ProjectContext.from_dict(context_data)
     except Exception as e:
         print(f"Error loading context: {e}", file=sys.stderr)
-        sys.exit(1)
+        sys.exit(ExitCodes.CONFIG_ERROR)
 
     # Load findings
     findings: List[Finding] = []
@@ -485,7 +490,7 @@ def main() -> None:
             findings.extend(parse_json_findings(findings_data))
         except Exception as e:
             print(f"Error loading findings JSON: {e}", file=sys.stderr)
-            sys.exit(1)
+            sys.exit(ExitCodes.CONFIG_ERROR)
 
     if args.findings_dir:
         findings_dir = Path(args.findings_dir)
@@ -499,7 +504,7 @@ def main() -> None:
 
     if not findings:
         print("No findings to process", file=sys.stderr)
-        sys.exit(0)
+        sys.exit(ExitCodes.SUCCESS)
 
     logger.info(f"Loaded {len(findings)} findings")
 

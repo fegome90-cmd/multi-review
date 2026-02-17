@@ -157,12 +157,19 @@ def load_results(results_path: Path) -> Dict[str, Any]:
             "schema_stable": summary.get("schema_stable", True),
         }
 
-        # Get latency from first result fixture if available
         if "results" in data:
             for fixture_name, fixture_data in data["results"].items():
                 latency = fixture_data.get("latency", {})
-                flat["latency_p50_ms"] = latency.get("p50", 0)
-                flat["latency_p95_ms"] = latency.get("p95", 0)
+                flat["latency_p50_ms"] = latency.get("p50_ms", latency.get("p50", 0))
+                flat["latency_p95_ms"] = latency.get("p95_ms", latency.get("p95", 0))
+
+                metrics = fixture_data.get("metrics", {})
+                if "fp_rate" in metrics:
+                    flat["fp_rate"] = metrics["fp_rate"]
+
+                cache = fixture_data.get("cache", {})
+                if "hit_rate" in cache:
+                    flat["cache_hit_rate"] = cache["hit_rate"]
                 break
 
         return flat

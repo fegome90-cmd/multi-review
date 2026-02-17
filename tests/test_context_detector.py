@@ -625,14 +625,13 @@ class TestEdgeCases:
 
     @patch("context_detector._run_git_command")
     @patch("context_detector._run_gh_command")
-    def test_handles_gh_timeout_gracefully(self, mock_gh, mock_git, caplog):
+    def test_handles_gh_timeout_gracefully(self, mock_gh, mock_git):
         """Should handle gh CLI timeout gracefully."""
         mock_gh.side_effect = RuntimeError("gh timed out")
         mock_git.return_value = Mock(stdout="", returncode=0)
 
         context = detect_context()
 
-        # Should continue without PR detection
         assert context["has_pr"] is False
 
     @patch("subprocess.run")
