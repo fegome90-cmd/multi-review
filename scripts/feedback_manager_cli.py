@@ -30,7 +30,6 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from feedback_manager import (
     FeedbackManager,
-    AgentCalibration,
     FeedbackType,
 )
 
@@ -43,17 +42,6 @@ def record_feedback(
     feedback_type: str,
     reason: str | None,
 ) -> int:
-    """Record feedback for a finding.
-
-    Args:
-        manager: FeedbackManager instance.
-        finding_json: JSON string with finding data.
-        feedback_type: Type of feedback.
-        reason: Optional reason.
-
-    Returns:
-        Exit code (0 for success).
-    """
     try:
         finding = json.loads(finding_json)
     except json.JSONDecodeError as e:
@@ -68,15 +56,6 @@ def record_feedback(
             f"Error: Invalid feedback type. Valid types: {valid_types}", file=sys.stderr
         )
         return ExitCodes.INVALID_ARGS
-
-    try:
-        fb_type = FeedbackType(feedback_type.lower())
-    except ValueError:
-        valid_types = [t.value for t in FeedbackType]
-        print(
-            f"Error: Invalid feedback type. Valid types: {valid_types}", file=sys.stderr
-        )
-        return 2
 
     entry = manager.record_feedback(
         finding_id=finding.get("id", "unknown"),

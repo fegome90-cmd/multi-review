@@ -50,17 +50,9 @@ class GateResult:
     message: str
 
 
-def check_fp_rate(results: Dict[str, Any]) -> GateResult:
-    """Check FP rate gate.
-
-    Args:
-        results: Benchmark results dictionary.
-
-    Returns:
-        GateResult with pass/fail status.
-    """
+def check_fp_rate(results: Dict[str, Any], gates: Dict[str, Any]) -> GateResult:
     fp_rate = results.get("fp_rate", 0.0)
-    threshold = GATES["fp_rate_max"]
+    threshold = gates["fp_rate_max"]
     passed = fp_rate <= threshold
 
     return GateResult(
@@ -72,17 +64,9 @@ def check_fp_rate(results: Dict[str, Any]) -> GateResult:
     )
 
 
-def check_latency(results: Dict[str, Any]) -> GateResult:
-    """Check latency gate.
-
-    Args:
-        results: Benchmark results dictionary.
-
-    Returns:
-        GateResult with pass/fail status.
-    """
+def check_latency(results: Dict[str, Any], gates: Dict[str, Any]) -> GateResult:
     latency_p95 = results.get("latency_p95_ms", 0)
-    threshold = GATES["latency_p95_max_ms"]
+    threshold = gates["latency_p95_max_ms"]
     passed = latency_p95 <= threshold
 
     return GateResult(
@@ -94,17 +78,9 @@ def check_latency(results: Dict[str, Any]) -> GateResult:
     )
 
 
-def check_cache_hit_rate(results: Dict[str, Any]) -> GateResult:
-    """Check cache hit rate gate.
-
-    Args:
-        results: Benchmark results dictionary.
-
-    Returns:
-        GateResult with pass/fail status.
-    """
+def check_cache_hit_rate(results: Dict[str, Any], gates: Dict[str, Any]) -> GateResult:
     cache_hit_rate = results.get("cache_hit_rate", 0.0)
-    threshold = GATES["cache_hit_rate_min"]
+    threshold = gates["cache_hit_rate_min"]
     passed = cache_hit_rate >= threshold
 
     return GateResult(
@@ -116,41 +92,29 @@ def check_cache_hit_rate(results: Dict[str, Any]) -> GateResult:
     )
 
 
-def check_schema_stability(results: Dict[str, Any]) -> GateResult:
-    """Check schema stability gate.
-
-    Args:
-        results: Benchmark results dictionary.
-
-    Returns:
-        GateResult with pass/fail status.
-    """
+def check_schema_stability(
+    results: Dict[str, Any], gates: Dict[str, Any]
+) -> GateResult:
     schema_stable = results.get("schema_stable", True)
-    passed = schema_stable == GATES["schema_stability"]
+    passed = schema_stable == gates["schema_stability"]
 
     return GateResult(
         name="schema_stability",
         passed=passed,
         actual=schema_stable,
-        threshold=GATES["schema_stability"],
+        threshold=gates["schema_stability"],
         message=f"Schema stability {'passed' if passed else 'failed'}",
     )
 
 
-def check_all_gates(results: Dict[str, Any]) -> Tuple[bool, List[GateResult]]:
-    """Check all gates against benchmark results.
-
-    Args:
-        results: Benchmark results dictionary.
-
-    Returns:
-        Tuple of (all_passed, list of GateResult).
-    """
+def check_all_gates(
+    results: Dict[str, Any], gates: Dict[str, Any]
+) -> Tuple[bool, List[GateResult]]:
     gate_checks = [
-        check_fp_rate(results),
-        check_latency(results),
-        check_cache_hit_rate(results),
-        check_schema_stability(results),
+        check_fp_rate(results, gates),
+        check_latency(results, gates),
+        check_cache_hit_rate(results, gates),
+        check_schema_stability(results, gates),
     ]
 
     all_passed = all(g.passed for g in gate_checks)
@@ -261,16 +225,17 @@ def main() -> int:
 
         args = parser.parse_args()
 
-        # Update gates with CLI args
-        GATES["fp_rate_max"] = args.fp_rate_max
-        GATES["latency_p95_max_ms"] = args.latency_p95_max
-        GATES["cache_hit_rate_min"] = args.cache_hit_rate_min
+        # Create local copy of gates with CLI overrides
+        gates = GATES.copy()
+        gates["fp_rate_max"] = args.fp_rate_max
+        gates["latency_p95_max_ms"] = args.latency_p95_max
+        gates["cache_hit_rate_min"] = args.cache_hit_rate_min
 
         # Load results (may raise FileNotFoundError, json.JSONDecodeError)
         results = load_results(args.results_file)
 
         # Check all gates
-        all_passed, gate_results = check_all_gates(results)
+        all_passed, gate_results = check_all_gates(results, gates)
 
         # Output report
         if args.json:
@@ -301,7 +266,8 @@ def main() -> int:
         return ExitCodes.SUCCESS if all_passed else ExitCodes.FAILURE
 
     except SystemExit as e:
-        # Handle argparse-generated exits (e.g., --help)
+        if e.code == 0:
+            return ExitCodes.SUCCESS
         return ExitCodes.INVALID_ARGS
     except FileNotFoundError as e:
         print(f"Error: {e}", file=sys.stderr)

@@ -749,7 +749,7 @@ class TestMainCLI:
         # Should output markdown
         assert "# Code Review Summary" in captured.out or "No findings" in captured.out
 
-    def test_main_exits_on_missing_context(self, capsys):
+    def test_main_exits_on_missing_context(self):
         """Test main exits when context file missing."""
         with patch(
             "sys.argv",
@@ -763,7 +763,7 @@ class TestMainCLI:
                 main()
             assert exc.value.code == 1
 
-    def test_main_exits_gracefully_on_no_findings(self, temp_files, capsys):
+    def test_main_exits_gracefully_on_no_findings(self, temp_files):
         """Test main exits gracefully when no findings."""
         # Create empty findings
         empty_findings = temp_files["dir"] / "empty.json"
