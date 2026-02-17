@@ -27,7 +27,12 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from finding_filter import Finding
+    from project_context import ProjectContext
 
 sys.path.insert(0, str(Path(__file__).parent))
 
@@ -260,7 +265,6 @@ def generate_mock_findings(fixture: FixtureData) -> List["Finding"]:
     Returns:
         List of Finding objects.
     """
-    from finding_filter import Finding
 
     findings = []
     finding_id = 0
@@ -401,15 +405,6 @@ def run_benchmark(
         BenchmarkResult with measurements and classifications.
     """
     from finding_filter import FindingFilter, FilterAction
-    from project_context import (
-        ProjectContext,
-        PythonConfig,
-        ShellConfig,
-        TestConfig,
-        GitMetadata,
-        ConfigValue,
-        EvidenceLevel,
-    )
     from bench_matcher import classify_finding_with_details, Classification
 
     # Load fixture

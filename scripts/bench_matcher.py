@@ -18,10 +18,10 @@ Dependencies:
 
 import fnmatch
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, FrozenSet, List, Optional, Pattern
+from typing import Any, Dict, List, Optional, Pattern
 
 
 class Classification(Enum):
@@ -573,7 +573,6 @@ def calculate_metrics(
 
 if __name__ == "__main__":
     # Demo/test of the matcher
-    import json
     import sys
 
     # Add scripts to path for Finding import

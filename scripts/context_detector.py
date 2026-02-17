@@ -32,13 +32,14 @@ import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from project_context import ProjectContext
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(levelname)s: %(message)s'
-)
+logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -47,7 +48,7 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 
 # Change size thresholds for preset selection
-CHANGE_SIZE_SMALL_THRESHOLD = 50   # Lines: use "quick" preset
+CHANGE_SIZE_SMALL_THRESHOLD = 50  # Lines: use "quick" preset
 CHANGE_SIZE_LARGE_THRESHOLD = 500  # Lines: use "comprehensive" preset
 
 # Maximum reasonable change size (for bounds checking)
@@ -63,6 +64,7 @@ VALIDATION_TIMEOUT = 2
 # EXCEPTIONS
 # =============================================================================
 
+
 class EnvironmentValidationError(Exception):
     """Raised when environment validation fails.
 
@@ -75,7 +77,9 @@ class EnvironmentValidationError(Exception):
 
     def __init__(self, errors: List[str]):
         self.errors = errors
-        message = "Environment validation failed:\n" + "\n".join(f"  - {e}" for e in errors)
+        message = "Environment validation failed:\n" + "\n".join(
+            f"  - {e}" for e in errors
+        )
         super().__init__(message)
 
 
@@ -83,10 +87,9 @@ class EnvironmentValidationError(Exception):
 # HELPER FUNCTIONS
 # =============================================================================
 
+
 def _run_git_command(
-    args: List[str],
-    timeout: int = DEFAULT_GIT_TIMEOUT,
-    operation: str = "git command"
+    args: List[str], timeout: int = DEFAULT_GIT_TIMEOUT, operation: str = "git command"
 ) -> subprocess.CompletedProcess:
     """Run a git command with comprehensive error handling.
 
@@ -114,8 +117,8 @@ def _run_git_command(
             ["git"] + args,
             capture_output=True,
             text=True,
-            encoding='utf-8',
-            errors='replace',
+            encoding="utf-8",
+            errors="replace",
             timeout=timeout,
         )
 
@@ -136,13 +139,9 @@ def _run_git_command(
                     f"Run 'git fsck' to diagnose."
                 )
             elif "not a git repository" in stderr.lower():
-                raise RuntimeError(
-                    f"{operation} failed: Not in a git repository"
-                )
+                raise RuntimeError(f"{operation} failed: Not in a git repository")
             elif "fatal:" in stderr.lower():
-                raise RuntimeError(
-                    f"{operation} failed: {stderr or 'unknown error'}"
-                )
+                raise RuntimeError(f"{operation} failed: {stderr or 'unknown error'}")
 
         return result
 
@@ -157,19 +156,14 @@ def _run_git_command(
             f"Install from https://git-scm.com/"
         )
     except PermissionError as e:
-        raise RuntimeError(
-            f"{operation} failed: Permission denied: {e}"
-        )
+        raise RuntimeError(f"{operation} failed: Permission denied: {e}")
     except OSError as e:
-        raise RuntimeError(
-            f"{operation} failed: {e}"
-        )
+        raise RuntimeError(f"{operation} failed: {e}")
     # Don't catch Exception here - let specific errors propagate
 
 
 def _run_gh_command(
-    args: List[str],
-    timeout: int = DEFAULT_GH_TIMEOUT
+    args: List[str], timeout: int = DEFAULT_GH_TIMEOUT
 ) -> subprocess.CompletedProcess:
     """Run a GitHub CLI (gh) command with comprehensive error handling.
 
@@ -198,8 +192,8 @@ def _run_gh_command(
             ["gh"] + args,
             capture_output=True,
             text=True,
-            encoding='utf-8',
-            errors='replace',
+            encoding="utf-8",
+            errors="replace",
             timeout=timeout,
         )
         return result
@@ -211,18 +205,16 @@ def _run_gh_command(
         )
     except subprocess.TimeoutExpired:
         raise RuntimeError(
-            f"gh command timed out after {timeout} seconds. "
-            "Check network connectivity."
+            f"gh command timed out after {timeout} seconds. Check network connectivity."
         )
     except OSError as e:
-        raise RuntimeError(
-            f"gh command failed: {e}"
-        )
+        raise RuntimeError(f"gh command failed: {e}")
 
 
 # =============================================================================
 # DATA CLASSES
 # =============================================================================
+
 
 @dataclass(frozen=True)
 class Agent:
@@ -238,6 +230,7 @@ class Agent:
         >>> agent.name
         'feature-dev:code-reviewer'
     """
+
     name: str
     description: str
     source: str  # "feature-dev", "pr-review-toolkit", "superpowers"
@@ -263,6 +256,7 @@ class Agent:
 # =============================================================================
 # VALIDATION FUNCTIONS
 # =============================================================================
+
 
 def _validate_agent_name(agent_name: str) -> None:
     """Validate agent name follows namespace:agent-name format.
@@ -291,7 +285,7 @@ def _validate_agent_name(agent_name: str) -> None:
         )
 
     # Check for control characters and other problematic characters
-    problematic_chars = ['\n', '\r', '\0', '\v', '\f']
+    problematic_chars = ["\n", "\r", "\0", "\v", "\f"]
     found = [c for c in problematic_chars if c in agent_name]
     if found:
         raise ValueError(
@@ -328,15 +322,13 @@ def _validate_agent_data_consistency() -> None:
     for preset_name, agent_list in AGENT_PRESETS.items():
         for agent_name in agent_list:
             if agent_name not in AGENT_MAP:
-                missing_agents.append(
-                    f"  - '{agent_name}' in preset '{preset_name}'"
-                )
+                missing_agents.append(f"  - '{agent_name}' in preset '{preset_name}'")
 
     if missing_agents:
         errors.append(
             "Agents in AGENT_PRESETS not found in AGENT_MAP:\n"
-            + "\n".join(missing_agents) +
-            f"\n\nAvailable agents in AGENT_MAP: {list(AGENT_MAP.keys())}"
+            + "\n".join(missing_agents)
+            + f"\n\nAvailable agents in AGENT_MAP: {list(AGENT_MAP.keys())}"
         )
 
     # Check 2: No duplicate agents in presets
@@ -385,20 +377,52 @@ def _validate_agent_data_consistency() -> None:
 
 # Available agents organized by priority
 PRIMARY_AGENTS = [
-    Agent("feature-dev:code-reviewer", "General code review with confidence scoring", "feature-dev"),
+    Agent(
+        "feature-dev:code-reviewer",
+        "General code review with confidence scoring",
+        "feature-dev",
+    ),
 ]
 
 SPECIALIZED_AGENTS = [
-    Agent("pr-review-toolkit:pr-test-analyzer", "Test coverage quality and completeness", "pr-review-toolkit"),
-    Agent("pr-review-toolkit:silent-failure-hunter", "Error handling and silent failures", "pr-review-toolkit"),
-    Agent("pr-review-toolkit:type-design-analyzer", "Type design quality and invariants", "pr-review-toolkit"),
-    Agent("pr-review-toolkit:comment-analyzer", "Code comment accuracy and maintainability", "pr-review-toolkit"),
-    Agent("pr-review-toolkit:code-simplifier", "Code simplification and refactoring", "pr-review-toolkit"),
-    Agent("pr-review-toolkit:code-reviewer", "General code review for project guidelines", "pr-review-toolkit"),
+    Agent(
+        "pr-review-toolkit:pr-test-analyzer",
+        "Test coverage quality and completeness",
+        "pr-review-toolkit",
+    ),
+    Agent(
+        "pr-review-toolkit:silent-failure-hunter",
+        "Error handling and silent failures",
+        "pr-review-toolkit",
+    ),
+    Agent(
+        "pr-review-toolkit:type-design-analyzer",
+        "Type design quality and invariants",
+        "pr-review-toolkit",
+    ),
+    Agent(
+        "pr-review-toolkit:comment-analyzer",
+        "Code comment accuracy and maintainability",
+        "pr-review-toolkit",
+    ),
+    Agent(
+        "pr-review-toolkit:code-simplifier",
+        "Code simplification and refactoring",
+        "pr-review-toolkit",
+    ),
+    Agent(
+        "pr-review-toolkit:code-reviewer",
+        "General code review for project guidelines",
+        "pr-review-toolkit",
+    ),
 ]
 
 FRAMEWORK_AGENTS = [
-    Agent("superpowers:code-review-checklist", "Framework-specific review guidance", "superpowers"),
+    Agent(
+        "superpowers:code-review-checklist",
+        "Framework-specific review guidance",
+        "superpowers",
+    ),
 ]
 
 ALL_AGENTS = PRIMARY_AGENTS + SPECIALIZED_AGENTS + FRAMEWORK_AGENTS
@@ -462,6 +486,7 @@ def _ensure_agent_data_consistency() -> None:
 # CONTEXT DETECTION
 # =============================================================================
 
+
 def detect_context() -> Dict[str, Any]:
     """Detect repository context and state.
 
@@ -520,34 +545,37 @@ def detect_context() -> Dict[str, Any]:
     try:
         # Detect staged files using helper
         result = _run_git_command(
-            ["diff", "--cached", "--name-only"],
-            operation="staged files detection"
+            ["diff", "--cached", "--name-only"], operation="staged files detection"
         )
         if result.stdout.strip():
             # Sanitize file paths (filter null bytes, carriage returns)
             raw_files = result.stdout.strip().split("\n")
             context["staged_files"] = [
-                f for f in raw_files
-                if f and not any(c in f for c in ['\0', '\r'])
+                f for f in raw_files if f and not any(c in f for c in ["\0", "\r"])
             ]
 
         # Detect working directory files using helper
         result = _run_git_command(
-            ["diff", "--name-only"],
-            operation="working directory detection"
+            ["diff", "--name-only"], operation="working directory detection"
         )
         if result.stdout.strip():
             raw_files = result.stdout.strip().split("\n")
             context["working_files"] = [
-                f for f in raw_files
-                if f and not any(c in f for c in ['\0', '\r'])
+                f for f in raw_files if f and not any(c in f for c in ["\0", "\r"])
             ]
 
         # Combine all changed files
         all_files = context["staged_files"] + context["working_files"]
 
         # Check for test files (case-insensitive)
-        test_patterns = ["_test.py", "_test.ts", ".test.ts", ".spec.ts", "__tests__.py", "tests/"]
+        test_patterns = [
+            "_test.py",
+            "_test.ts",
+            ".test.ts",
+            ".spec.ts",
+            "__tests__.py",
+            "tests/",
+        ]
         context["has_tests"] = any(
             any(pattern.lower() in f.lower() for pattern in test_patterns)
             for f in all_files
@@ -569,19 +597,22 @@ def detect_context() -> Dict[str, Any]:
 
         # Estimate change size with robust parsing using helper
         result = _run_git_command(
-            ["diff", "--cached", "--shortstat"],
-            operation="change size detection"
+            ["diff", "--cached", "--shortstat"], operation="change size detection"
         )
         if result.stdout.strip():
             try:
                 # More robust parsing using regex
-                match = re.search(r'(\d+)\s+insertion', result.stdout)
+                match = re.search(r"(\d+)\s+insertion", result.stdout)
                 if match:
                     change_size = int(match.group(1))
                     # Add bounds checking
-                    context["change_size"] = min(change_size, MAX_REASONABLE_CHANGE_SIZE)
+                    context["change_size"] = min(
+                        change_size, MAX_REASONABLE_CHANGE_SIZE
+                    )
                     if change_size >= MAX_REASONABLE_CHANGE_SIZE:
-                        logger.warning(f"Change size capped at {MAX_REASONABLE_CHANGE_SIZE}")
+                        logger.warning(
+                            f"Change size capped at {MAX_REASONABLE_CHANGE_SIZE}"
+                        )
             except (ValueError, AttributeError) as e:
                 logger.error(
                     f"Unexpected error parsing git shortstat output: {e}. "
@@ -599,6 +630,7 @@ def detect_context() -> Dict[str, Any]:
 # =============================================================================
 # PROJECT CONTEXT DETECTION (3-Layer Defense - Layer 1)
 # =============================================================================
+
 
 def detect_pyproject_config(repo_root: Path) -> Dict[str, Any]:
     """Parse pyproject.toml for Python tool configuration.
@@ -633,14 +665,14 @@ def detect_pyproject_config(repo_root: Path) -> Dict[str, Any]:
         return result
 
     try:
-        content = pyproject_path.read_text(encoding='utf-8')
+        content = pyproject_path.read_text(encoding="utf-8")
 
         # Simple TOML parsing without external dependencies
         # Look for [tool.mypy] section
         in_mypy_section = False
         in_ruff_section = False
 
-        for line in content.split('\n'):
+        for line in content.split("\n"):
             line = line.strip()
 
             # Section detection
@@ -653,7 +685,9 @@ def detect_pyproject_config(repo_root: Path) -> Dict[str, Any]:
                 in_ruff_section = True
                 in_mypy_section = False
                 continue
-            elif line.startswith("[") and line != "[tool.mypy]" and line != "[tool.ruff]":
+            elif (
+                line.startswith("[") and line != "[tool.mypy]" and line != "[tool.ruff]"
+            ):
                 in_mypy_section = False
                 in_ruff_section = False
                 continue
@@ -665,9 +699,11 @@ def detect_pyproject_config(repo_root: Path) -> Dict[str, Any]:
                     if "true" in line.lower() or "yes" in line.lower():
                         result["mypy_strict"] = True
                         result["type_checking_level"] = "strict"
-                elif ("strict_optional" in line.lower() or
-                      "disallow_untyped_defs" in line.lower() or
-                      "warn_return_any" in line.lower()):
+                elif (
+                    "strict_optional" in line.lower()
+                    or "disallow_untyped_defs" in line.lower()
+                    or "warn_return_any" in line.lower()
+                ):
                     if "true" in line.lower() or "yes" in line.lower():
                         result["mypy_strict"] = True
                         if result["type_checking_level"] == "none":
@@ -678,6 +714,7 @@ def detect_pyproject_config(repo_root: Path) -> Dict[str, Any]:
                 if "select" in line.lower() and "=" in line:
                     # Extract rule codes like ["E", "F", "I"]
                     import re
+
                     rules_match = re.findall(r'"([A-Z]+)"', line)
                     result["ruff_rules"].extend(rules_match)
 
@@ -711,10 +748,11 @@ def detect_ruff_config(repo_root: Path) -> List[str]:
             continue
 
         try:
-            content = config_path.read_text(encoding='utf-8')
+            content = config_path.read_text(encoding="utf-8")
             import re
+
             # Look for select = [...] or extend-select = [...]
-            for line in content.split('\n'):
+            for line in content.split("\n"):
                 if "select" in line.lower() and "=" in line:
                     rules_match = re.findall(r'"([A-Z]+)"', line)
                     rules.extend(rules_match)
@@ -744,10 +782,10 @@ def detect_mypy_config(repo_root: Path) -> Dict[str, bool]:
             continue
 
         try:
-            content = config_path.read_text(encoding='utf-8')
+            content = config_path.read_text(encoding="utf-8")
             in_mypy_section = False
 
-            for line in content.split('\n'):
+            for line in content.split("\n"):
                 line = line.strip()
 
                 if config_path.name == "mypy.ini":
@@ -769,10 +807,15 @@ def detect_mypy_config(repo_root: Path) -> Dict[str, bool]:
                     if "strict" in line.lower() and "=" in line:
                         if "true" in line.lower() or "yes" in line.lower():
                             result["strict"] = True
-                    elif any(flag in line.lower() for flag in [
-                        "strict_optional", "disallow_untyped_defs",
-                        "warn_return_any", "disallow_any_generics"
-                    ]):
+                    elif any(
+                        flag in line.lower()
+                        for flag in [
+                            "strict_optional",
+                            "disallow_untyped_defs",
+                            "warn_return_any",
+                            "disallow_any_generics",
+                        ]
+                    ):
                         if "true" in line.lower() or "yes" in line.lower():
                             result["strict"] = True
 
@@ -809,12 +852,12 @@ def detect_shell_strict_mode(files: List[str], repo_root: Path) -> Dict[str, Any
         "has_any_shell_scripts": False,
     }
 
-    shell_extensions = {'.sh', '.bash', '.zsh'}
+    shell_extensions = {".sh", ".bash", ".zsh"}
     strict_patterns = [
-        'set -euo pipefail',
-        'set -e -u -o pipefail',
-        'set -eo pipefail',
-        'set -eu pipefail',
+        "set -euo pipefail",
+        "set -e -u -o pipefail",
+        "set -eo pipefail",
+        "set -eu pipefail",
     ]
 
     for file_path in files:
@@ -827,13 +870,15 @@ def detect_shell_strict_mode(files: List[str], repo_root: Path) -> Dict[str, Any
         full_path = repo_root / file_path
 
         try:
-            content = full_path.read_text(encoding='utf-8', errors='replace')
-            for i, line in enumerate(content.split('\n'), 1):
+            content = full_path.read_text(encoding="utf-8", errors="replace")
+            for i, line in enumerate(content.split("\n"), 1):
                 # Check for strict mode patterns
                 line_stripped = line.strip()
                 if any(pattern in line_stripped for pattern in strict_patterns):
                     result["strict_mode_files"].add(Path(file_path))
-                    result["detection_evidence"].append(f"{file_path}:{i}:{line_stripped[:50]}")
+                    result["detection_evidence"].append(
+                        f"{file_path}:{i}:{line_stripped[:50]}"
+                    )
                     break  # Only record first occurrence per file
         except (OSError, PermissionError) as e:
             logger.debug(f"Could not read shell file {file_path}: {e}")
@@ -869,29 +914,33 @@ def detect_result_pattern(repo_root: Path, files: List[str]) -> Dict[str, Any]:
     }
 
     result_patterns = [
-        'from returns.result import',
-        'from returns import Result',
-        'from result import Result',
-        'from either import Either',
-        'from pydantic import Result',
-        'import returns',
+        "from returns.result import",
+        "from returns import Result",
+        "from result import Result",
+        "from either import Either",
+        "from pydantic import Result",
+        "import returns",
     ]
 
-    python_files = [f for f in files if f.endswith('.py')]
+    python_files = [f for f in files if f.endswith(".py")]
 
     for file_path in python_files[:50]:  # Limit to first 50 files for performance
         full_path = repo_root / file_path
         try:
-            content = full_path.read_text(encoding='utf-8', errors='replace')
-            for i, line in enumerate(content.split('\n'), 1):
+            content = full_path.read_text(encoding="utf-8", errors="replace")
+            for i, line in enumerate(content.split("\n"), 1):
                 line_stripped = line.strip()
                 for pattern in result_patterns:
                     if pattern in line_stripped:
                         result["uses_result_pattern"] = True
-                        result["evidence"].append(f"{file_path}:{i}:{line_stripped[:60]}")
+                        result["evidence"].append(
+                            f"{file_path}:{i}:{line_stripped[:60]}"
+                        )
                         break
         except (OSError, PermissionError) as e:
-            logger.debug(f"Could not read {file_path} for Result pattern detection: {e}")
+            logger.debug(
+                f"Could not read {file_path} for Result pattern detection: {e}"
+            )
 
     return result
 
@@ -918,15 +967,15 @@ def get_git_blame_authors(files: List[str], repo_root: Path) -> Dict[str, List[s
             blame_result = _run_git_command(
                 ["blame", "--line-porcelain", file_path],
                 timeout=10,
-                operation=f"git blame for {file_path}"
+                operation=f"git blame for {file_path}",
             )
 
             if blame_result.returncode == 0:
                 authors = set()
-                for line in blame_result.stdout.split('\n'):
-                    if line.startswith('author '):
+                for line in blame_result.stdout.split("\n"):
+                    if line.startswith("author "):
                         author = line[7:].strip()
-                        if author and author != 'Not Committed Yet':
+                        if author and author != "Not Committed Yet":
                             authors.add(author)
                 result[file_path] = list(authors)
         except RuntimeError as e:
@@ -936,8 +985,7 @@ def get_git_blame_authors(files: List[str], repo_root: Path) -> Dict[str, List[s
 
 
 def build_project_context(
-    repo_root: Optional[Path] = None,
-    changed_files: Optional[List[str]] = None
+    repo_root: Optional[Path] = None, changed_files: Optional[List[str]] = None
 ) -> "ProjectContext":
     """Build complete ProjectContext for false positive elimination.
 
@@ -976,15 +1024,21 @@ def build_project_context(
     if changed_files is None:
         try:
             staged_result = _run_git_command(
-                ["diff", "--cached", "--name-only"],
-                operation="get staged files"
+                ["diff", "--cached", "--name-only"], operation="get staged files"
             )
             working_result = _run_git_command(
-                ["diff", "--name-only"],
-                operation="get working files"
+                ["diff", "--name-only"], operation="get working files"
             )
-            staged = staged_result.stdout.strip().split('\n') if staged_result.stdout.strip() else []
-            working = working_result.stdout.strip().split('\n') if working_result.stdout.strip() else []
+            staged = (
+                staged_result.stdout.strip().split("\n")
+                if staged_result.stdout.strip()
+                else []
+            )
+            working = (
+                working_result.stdout.strip().split("\n")
+                if working_result.stdout.strip()
+                else []
+            )
             changed_files = [f for f in staged + working if f]
         except RuntimeError:
             changed_files = []
@@ -1010,23 +1064,29 @@ def build_project_context(
         mypy_strict=ConfigValue(
             mypy_strict,
             EvidenceLevel.FACT if mypy_configured else EvidenceLevel.ASSUMPTION,
-            "pyproject.toml [tool.mypy] or mypy.ini" if mypy_configured else "no mypy config found"
+            "pyproject.toml [tool.mypy] or mypy.ini"
+            if mypy_configured
+            else "no mypy config found",
         ),
         mypy_configured=ConfigValue(
             mypy_configured,
             EvidenceLevel.FACT,
-            "config file present" if mypy_configured else "no config file"
+            "config file present" if mypy_configured else "no config file",
         ),
         ruff_rules=frozenset(all_ruff_rules),
         type_checking_level=ConfigValue(
             pyproject_config["type_checking_level"],
             EvidenceLevel.FACT if mypy_configured else EvidenceLevel.ASSUMPTION,
-            "from mypy config" if mypy_configured else "no type checker configured"
+            "from mypy config" if mypy_configured else "no type checker configured",
         ),
         uses_result_pattern=ConfigValue(
             result_pattern["uses_result_pattern"],
-            EvidenceLevel.HEURISTIC if result_pattern["uses_result_pattern"] else EvidenceLevel.ASSUMPTION,
-            "detected Result imports" if result_pattern["uses_result_pattern"] else "no Result imports detected"
+            EvidenceLevel.HEURISTIC
+            if result_pattern["uses_result_pattern"]
+            else EvidenceLevel.ASSUMPTION,
+            "detected Result imports"
+            if result_pattern["uses_result_pattern"]
+            else "no Result imports detected",
         ),
         result_pattern_evidence=frozenset(result_pattern["evidence"]),
     )
@@ -1038,15 +1098,16 @@ def build_project_context(
         has_any_shell_scripts=ConfigValue(
             shell_config["has_any_shell_scripts"],
             EvidenceLevel.FACT,
-            "shell file extensions detected" if shell_config["has_any_shell_scripts"] else "no shell files found"
+            "shell file extensions detected"
+            if shell_config["has_any_shell_scripts"]
+            else "no shell files found",
         ),
     )
 
     # Build TestConfig
     test_patterns = ["_test.py", "_tests.py", "test_", "tests/", "conftest.py"]
     has_tests = any(
-        any(pattern in f for pattern in test_patterns)
-        for f in changed_files
+        any(pattern in f for pattern in test_patterns) for f in changed_files
     )
 
     test_framework = "none"
@@ -1058,22 +1119,18 @@ def build_project_context(
         has_tests=ConfigValue(
             has_tests,
             EvidenceLevel.FACT if has_tests else EvidenceLevel.ASSUMPTION,
-            "test files detected" if has_tests else "no test files found"
+            "test files detected" if has_tests else "no test files found",
         ),
         test_framework=ConfigValue(
             test_framework,
             EvidenceLevel.HEURISTIC if has_tests else EvidenceLevel.ASSUMPTION,
-            "inferred from file naming" if has_tests else "no test framework detected"
+            "inferred from file naming" if has_tests else "no test framework detected",
         ),
         coverage_tool=ConfigValue(
-            "none",
-            EvidenceLevel.ASSUMPTION,
-            "no coverage tool configured"
+            "none", EvidenceLevel.ASSUMPTION, "no coverage tool configured"
         ),
         min_coverage_threshold=ConfigValue(
-            None,
-            EvidenceLevel.ASSUMPTION,
-            "no coverage threshold configured"
+            None, EvidenceLevel.ASSUMPTION, "no coverage threshold configured"
         ),
     )
 
@@ -1083,13 +1140,9 @@ def build_project_context(
         has_git=ConfigValue(
             has_git,
             EvidenceLevel.FACT,
-            ".git directory present" if has_git else "not a git repository"
+            ".git directory present" if has_git else "not a git repository",
         ),
-        main_branch=ConfigValue(
-            "main",
-            EvidenceLevel.ASSUMPTION,
-            "default assumption"
-        ),
+        main_branch=ConfigValue("main", EvidenceLevel.ASSUMPTION, "default assumption"),
         pre_existing_issue_authors=frozenset(),
         changed_files=frozenset(changed_files),
     )
@@ -1105,6 +1158,7 @@ def build_project_context(
 # =============================================================================
 # ENVIRONMENT VALIDATION
 # =============================================================================
+
 
 def validate_environment(raise_on_error: bool = False) -> Tuple[bool, List[str]]:
     """Validate that required tools are available.
@@ -1135,8 +1189,8 @@ def validate_environment(raise_on_error: bool = False) -> Tuple[bool, List[str]]
             ["git", "--version"],
             capture_output=True,
             text=True,
-            encoding='utf-8',
-            errors='replace',
+            encoding="utf-8",
+            errors="replace",
             timeout=VALIDATION_TIMEOUT,
         )
         if result.returncode != 0:
@@ -1176,8 +1230,8 @@ def validate_environment(raise_on_error: bool = False) -> Tuple[bool, List[str]]
             ["gh", "--version"],
             capture_output=True,
             text=True,
-            encoding='utf-8',
-            errors='replace',
+            encoding="utf-8",
+            errors="replace",
             timeout=VALIDATION_TIMEOUT,
         )
         if result.returncode == 0:
@@ -1205,6 +1259,7 @@ def validate_environment(raise_on_error: bool = False) -> Tuple[bool, List[str]]
 # AGENT SELECTION
 # =============================================================================
 
+
 def _find_agent(preset: str, suffix: str) -> str:
     """Find agent in preset by name suffix.
 
@@ -1230,10 +1285,14 @@ def _find_agent(preset: str, suffix: str) -> str:
         raise ValueError("suffix cannot be empty")
 
     if preset not in AGENT_PRESETS:
-        raise ValueError(f"Invalid preset '{preset}'. Must be one of: {list(AGENT_PRESETS.keys())}")
+        raise ValueError(
+            f"Invalid preset '{preset}'. Must be one of: {list(AGENT_PRESETS.keys())}"
+        )
 
     # Find all agents matching the suffix
-    matching_agents = [agent for agent in AGENT_PRESETS[preset] if agent.endswith(suffix)]
+    matching_agents = [
+        agent for agent in AGENT_PRESETS[preset] if agent.endswith(suffix)
+    ]
 
     if not matching_agents:
         raise ValueError(f"No agent ending with '{suffix}' in {preset} preset")
@@ -1293,7 +1352,9 @@ def _get_preset_reason(preset: str, context: Dict[str, Any]) -> str:
     return base_reason
 
 
-def format_output(context: Dict[str, Any], suggested_preset: str, warnings: List[str]) -> str:
+def format_output(
+    context: Dict[str, Any], suggested_preset: str, warnings: List[str]
+) -> str:
     """Format detection results as structured JSON.
 
     Args:
@@ -1390,6 +1451,7 @@ def format_agent_list(agents: List[Agent], group_name: str) -> str:
 # MAIN ENTRY POINT
 # =============================================================================
 
+
 def main() -> None:
     """Main entry point with comprehensive error handling."""
     try:
@@ -1410,33 +1472,27 @@ Examples:
   %(prog)s --suggest              # Suggest agents based on context
   %(prog)s --list                 # List all available agents
   %(prog)s --presets              # List available presets
-            """
+            """,
         )
 
         parser.add_argument(
             "--suggest",
             action="store_true",
-            help="Suggest agents based on current repository context"
+            help="Suggest agents based on current repository context",
         )
         parser.add_argument(
-            "--list",
-            action="store_true",
-            help="List all available agents"
+            "--list", action="store_true", help="List all available agents"
         )
         parser.add_argument(
-            "--presets",
-            action="store_true",
-            help="List available presets"
+            "--presets", action="store_true", help="List available presets"
         )
         parser.add_argument(
-            "--context",
-            action="store_true",
-            help="Show detected context information"
+            "--context", action="store_true", help="Show detected context information"
         )
         parser.add_argument(
             "--context-json",
             action="store_true",
-            help="Output ProjectContext as JSON for 3-Layer Defense filtering"
+            help="Output ProjectContext as JSON for 3-Layer Defense filtering",
         )
 
         args = parser.parse_args()
@@ -1446,7 +1502,10 @@ Examples:
                 context = detect_context()
             except RuntimeError as e:
                 print(f"Error detecting repository context: {e}", file=sys.stderr)
-                print("\nCannot suggest agents without context information.", file=sys.stderr)
+                print(
+                    "\nCannot suggest agents without context information.",
+                    file=sys.stderr,
+                )
                 sys.exit(1)
             except Exception as e:
                 print(f"Unexpected error detecting context: {e}", file=sys.stderr)
@@ -1476,13 +1535,17 @@ Examples:
                 else:
                     # CRITICAL: Log and report missing agents
                     print(f"  ⚠️  ERROR: Agent '{agent_name}' not found in AGENT_MAP")
-                    logger.error(f"Agent '{agent_name}' not found. Valid: {list(AGENT_MAP.keys())}")
+                    logger.error(
+                        f"Agent '{agent_name}' not found. Valid: {list(AGENT_MAP.keys())}"
+                    )
             print()
 
         elif args.list:
             print("Available Agents:\n")
             print(format_agent_list(PRIMARY_AGENTS, "Primary (Recommended)"))
-            print(format_agent_list(SPECIALIZED_AGENTS, "Specialized (pr-review-toolkit)"))
+            print(
+                format_agent_list(SPECIALIZED_AGENTS, "Specialized (pr-review-toolkit)")
+            )
             print(format_agent_list(FRAMEWORK_AGENTS, "Framework-Specific"))
             print()
 
@@ -1513,14 +1576,14 @@ Examples:
             print(f"  Working files: {len(context['working_files'])}")
 
             if context["staged_files"]:
-                print(f"\n  Staged files:")
+                print("\n  Staged files:")
                 for f in context["staged_files"][:10]:
                     print(f"    - {f}")
                 if len(context["staged_files"]) > 10:
                     print(f"    ... and {len(context['staged_files']) - 10} more")
 
             if context["working_files"]:
-                print(f"\n  Working files:")
+                print("\n  Working files:")
                 for f in context["working_files"][:10]:
                     print(f"    - {f}")
                 if len(context["working_files"]) > 10:

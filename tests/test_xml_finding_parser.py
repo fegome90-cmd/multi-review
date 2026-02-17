@@ -19,7 +19,6 @@ from xml_finding_parser import (
     _parse_confidence,
     _parse_severity,
 )
-from finding_filter import Finding
 
 
 class TestExtractXmlBlocks:

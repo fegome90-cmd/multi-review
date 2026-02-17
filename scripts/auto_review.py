@@ -21,22 +21,18 @@ Exit codes:
 import argparse
 import json
 import logging
-import os
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 # Import shared utilities
 from utils import (
     EXIT_SUCCESS,
     EXIT_ISSUES_FOUND,
     EXIT_ERROR,
-    EXIT_TYPE_ERRORS,
     ExitCodes,
     count_lines_safely,
-    format_report_summary,
-    log_review_summary,
     save_report as save_report_to_file,
 )
 

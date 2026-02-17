@@ -4,12 +4,10 @@ This test file follows TDD principles with comprehensive coverage
 for the pre-commit hook functionality.
 """
 
-import json
 import pytest
 import subprocess
 from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock
-from typing import List
+from unittest.mock import Mock, patch
 
 # Import the module to test
 import sys

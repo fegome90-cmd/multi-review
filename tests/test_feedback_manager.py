@@ -5,11 +5,9 @@ Tests for feedback_manager module.
 Run with: pytest tests/test_feedback_manager.py -v
 """
 
-import json
 import sys
 import tempfile
 from pathlib import Path
-from datetime import datetime
 
 # Add scripts to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))

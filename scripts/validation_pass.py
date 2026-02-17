@@ -23,7 +23,12 @@ import subprocess
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from finding_filter import Finding
+    from project_context import ProjectContext
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +36,7 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 # EVIDENCE DATACLASS
 # =============================================================================
+
 
 @dataclass(frozen=True)
 class Evidence:
@@ -44,6 +50,7 @@ class Evidence:
         severity: Severity level from the tool ('error', 'warning', 'info').
         code: Optional error code (e.g., 'F401', 'E501' for ruff).
     """
+
     source: str
     file: str
     line: Optional[int]
@@ -51,11 +58,7 @@ class Evidence:
     severity: str
     code: Optional[str] = None
 
-    def matches_finding(
-        self,
-        finding: "Finding",
-        line_tolerance: int = 2
-    ) -> bool:
+    def matches_finding(self, finding: "Finding", line_tolerance: int = 2) -> bool:
         """Check if this evidence matches a finding.
 
         Args:
@@ -79,6 +82,7 @@ class Evidence:
 # VALIDATION MODE ENUM
 # =============================================================================
 
+
 class ValidationMode(Enum):
     """Mode for validation pass.
 
@@ -86,6 +90,7 @@ class ValidationMode(Enum):
         FAST: Use cached evidence from previous runs (default).
         EVIDENCE: Actually run tools to get fresh evidence.
     """
+
     FAST = "fast"
     EVIDENCE = "evidence"
 
@@ -93,6 +98,7 @@ class ValidationMode(Enum):
 # =============================================================================
 # TOOL OUTPUT PARSERS
 # =============================================================================
+
 
 def parse_ruff_output(output: str, file_path: str) -> List[Evidence]:
     """Parse ruff check output into Evidence objects.
@@ -109,12 +115,12 @@ def parse_ruff_output(output: str, file_path: str) -> List[Evidence]:
     """
     evidence_list = []
 
-    for line in output.strip().split('\n'):
-        if not line or line.startswith('Found'):
+    for line in output.strip().split("\n"):
+        if not line or line.startswith("Found"):
             continue
 
         # Parse format: file.py:line:col: CODE message
-        parts = line.split(':', 3)
+        parts = line.split(":", 3)
         if len(parts) >= 4:
             try:
                 line_num = int(parts[1].strip())
@@ -123,24 +129,26 @@ def parse_ruff_output(output: str, file_path: str) -> List[Evidence]:
                 # Extract code and message
                 code = None
                 message = rest
-                if rest[0].isupper() and ' ' in rest:
-                    code_end = rest.index(' ')
+                if rest[0].isupper() and " " in rest:
+                    code_end = rest.index(" ")
                     potential_code = rest[:code_end]
                     if potential_code.isupper() or potential_code[0].isupper():
                         code = potential_code
-                        message = rest[code_end + 1:].strip()
+                        message = rest[code_end + 1 :].strip()
                         # Remove [*] marker if present
-                        if message.startswith('[*]'):
+                        if message.startswith("[*]"):
                             message = message[3:].strip()
 
-                evidence_list.append(Evidence(
-                    source='ruff',
-                    file=file_path,
-                    line=line_num,
-                    message=message,
-                    severity='warning',
-                    code=code,
-                ))
+                evidence_list.append(
+                    Evidence(
+                        source="ruff",
+                        file=file_path,
+                        line=line_num,
+                        message=message,
+                        severity="warning",
+                        code=code,
+                    )
+                )
             except (ValueError, IndexError):
                 continue
 
@@ -162,12 +170,12 @@ def parse_mypy_output(output: str, file_path: str) -> List[Evidence]:
     """
     evidence_list = []
 
-    for line in output.strip().split('\n'):
+    for line in output.strip().split("\n"):
         if not line:
             continue
 
         # Parse format: file.py:line: severity: message
-        parts = line.split(':', 3)
+        parts = line.split(":", 3)
         if len(parts) >= 4:
             try:
                 line_num = int(parts[1].strip())
@@ -175,21 +183,23 @@ def parse_mypy_output(output: str, file_path: str) -> List[Evidence]:
                 message = parts[3].strip()
 
                 # Normalize severity
-                if severity == 'error':
-                    severity = 'error'
-                elif severity in ('warning', 'note'):
-                    severity = 'warning'
+                if severity == "error":
+                    severity = "error"
+                elif severity in ("warning", "note"):
+                    severity = "warning"
                 else:
-                    severity = 'info'
+                    severity = "info"
 
-                evidence_list.append(Evidence(
-                    source='mypy',
-                    file=file_path,
-                    line=line_num,
-                    message=message,
-                    severity=severity,
-                    code=None,
-                ))
+                evidence_list.append(
+                    Evidence(
+                        source="mypy",
+                        file=file_path,
+                        line=line_num,
+                        message=message,
+                        severity=severity,
+                        code=None,
+                    )
+                )
             except (ValueError, IndexError):
                 continue
 
@@ -199,6 +209,7 @@ def parse_mypy_output(output: str, file_path: str) -> List[Evidence]:
 # =============================================================================
 # VALIDATION PASS CLASS
 # =============================================================================
+
 
 class ValidationPass:
     """Layer 3: Evidence-based validation.
@@ -266,10 +277,10 @@ class ValidationPass:
         full_path = self.repo_root / file_path
 
         # Run ruff for Python files
-        if file_path.endswith('.py'):
+        if file_path.endswith(".py"):
             try:
                 result = subprocess.run(
-                    ['ruff', 'check', str(full_path), '--output-format', 'text'],
+                    ["ruff", "check", str(full_path), "--output-format", "text"],
                     capture_output=True,
                     text=True,
                     timeout=30,
@@ -287,13 +298,15 @@ class ValidationPass:
             if self.context.python_config.mypy_configured.value:
                 try:
                     result = subprocess.run(
-                        ['mypy', str(full_path), '--no-error-summary'],
+                        ["mypy", str(full_path), "--no-error-summary"],
                         capture_output=True,
                         text=True,
                         timeout=60,
                     )
                     if result.stdout:
-                        evidence_list.extend(parse_mypy_output(result.stdout, file_path))
+                        evidence_list.extend(
+                            parse_mypy_output(result.stdout, file_path)
+                        )
                 except FileNotFoundError:
                     logger.debug("mypy not found - skipping mypy evidence")
                 except subprocess.TimeoutExpired:
@@ -320,11 +333,9 @@ class ValidationPass:
             return []
 
         try:
-            content = cache_file.read_text(encoding='utf-8')
+            content = cache_file.read_text(encoding="utf-8")
             data = json.loads(content)
-            return [
-                Evidence(**item) for item in data.get('evidence', [])
-            ]
+            return [Evidence(**item) for item in data.get("evidence", [])]
         except (OSError, json.JSONDecodeError) as e:
             logger.debug(f"Failed to load evidence cache for {file_path}: {e}")
             return []
@@ -369,18 +380,23 @@ class ValidationPass:
             True if tool evidence contradicts the finding.
         """
         # Type annotation findings with mypy not in strict mode
-        if finding.category.lower() in {'type_annotation', 'typing'}:
+        if finding.category.lower() in {"type_annotation", "typing"}:
             # If mypy is configured but not strict, type annotation issues
             # in internal code might be intentional
-            if (self.context.python_config.mypy_configured.value and
-                not self.context.python_config.mypy_strict.value):
+            if (
+                self.context.python_config.mypy_configured.value
+                and not self.context.python_config.mypy_strict.value
+            ):
                 # Check if this is about internal/private code
-                if '_' in finding.description or 'internal' in finding.description.lower():
+                if (
+                    "_" in finding.description
+                    or "internal" in finding.description.lower()
+                ):
                     return True
 
         # Error handling findings in strict shell scripts
-        if finding.category.lower() in {'error_handling', 'error-handling'}:
-            if finding.file.endswith(('.sh', '.bash', '.zsh')):
+        if finding.category.lower() in {"error_handling", "error-handling"}:
+            if finding.file.endswith((".sh", ".bash", ".zsh")):
                 if Path(finding.file) in self.context.shell_config.strict_mode_files:
                     return True
 
@@ -397,10 +413,13 @@ class ValidationPass:
         """
         # Result pattern: if project uses Result, some "missing error handling"
         # findings might be false positives
-        if finding.category.lower() in {'error_handling', 'error-handling'}:
+        if finding.category.lower() in {"error_handling", "error-handling"}:
             if self.context.python_config.uses_result_pattern.value:
                 # Check if the description mentions exceptions being raised
-                if 'exception' in finding.description.lower() or 'raise' in finding.description.lower():
+                if (
+                    "exception" in finding.description.lower()
+                    or "raise" in finding.description.lower()
+                ):
                     # Project uses Result pattern - might be intentional
                     return True
 
@@ -423,7 +442,7 @@ class ValidationPass:
         if self._tool_catches(evidence, finding):
             # Keep the finding - tool confirms it's real
             new_refs = list(finding.evidence_refs) + [
-                f"CONFIRMED: Tool reports similar issue"
+                "CONFIRMED: Tool reports similar issue"
             ]
             return dataclasses.replace(
                 finding,
@@ -433,7 +452,7 @@ class ValidationPass:
         # Check 2: Does tool output contradict this?
         if self._tool_contradicts(evidence, finding):
             new_refs = list(finding.evidence_refs) + [
-                f"CONTRADICTS: Tool evidence suggests this is not an issue"
+                "CONTRADICTS: Tool evidence suggests this is not an issue"
             ]
             return dataclasses.replace(
                 finding,
@@ -444,7 +463,7 @@ class ValidationPass:
         # Check 3: Does it contradict known patterns?
         if self._contradicts_pattern(finding):
             new_refs = list(finding.evidence_refs) + [
-                f"CONTRADICTS: Project pattern suggests intentional design"
+                "CONTRADICTS: Project pattern suggests intentional design"
             ]
             return dataclasses.replace(
                 finding,
@@ -466,10 +485,7 @@ class ValidationPass:
         """
         return [self.validate_finding(f) for f in findings]
 
-    def get_validation_summary(
-        self,
-        findings: List["Finding"]
-    ) -> Dict[str, Any]:
+    def get_validation_summary(self, findings: List["Finding"]) -> Dict[str, Any]:
         """Get summary of validation results.
 
         Args:
@@ -480,13 +496,18 @@ class ValidationPass:
         """
         validated = self.validate_findings(findings)
 
-        confirmed = sum(1 for f in validated if any(
-            ref.startswith("CONFIRMED:") for ref in f.evidence_refs
-        ))
+        confirmed = sum(
+            1
+            for f in validated
+            if any(ref.startswith("CONFIRMED:") for ref in f.evidence_refs)
+        )
         contradicted = sum(1 for f in validated if f.confidence == 0)
-        reduced = sum(1 for f in validated if any(
-            ref.startswith("CONTRADICTS:") for ref in f.evidence_refs
-        ) and f.confidence > 0)
+        reduced = sum(
+            1
+            for f in validated
+            if any(ref.startswith("CONTRADICTS:") for ref in f.evidence_refs)
+            and f.confidence > 0
+        )
 
         return {
             "total_findings": len(findings),
@@ -500,6 +521,7 @@ class ValidationPass:
 # =============================================================================
 # CONVENIENCE FUNCTIONS
 # =============================================================================
+
 
 def run_validation_pass(
     findings: List["Finding"],

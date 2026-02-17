@@ -28,6 +28,10 @@ from dataclasses import dataclass, asdict
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from project_context import ProjectContext
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +57,7 @@ AUDIT_LOG_NAME = "audit_log.jsonl"
 # CACHE DATACLASS
 # =============================================================================
 
+
 @dataclass
 class CachedPrompt:
     """A cached calibrated prompt.
@@ -66,6 +71,7 @@ class CachedPrompt:
         ttl_days: Time-to-live in days.
         integrity_hash: SHA256 of (prompt + guardrails) for integrity check.
     """
+
     context_hash: str
     agent_name: str
     calibrated_prompt: str
@@ -117,6 +123,7 @@ class CachedPrompt:
 # AUDIT LOG ENTRY
 # =============================================================================
 
+
 @dataclass
 class PromptAuditEntry:
     """Audit entry for prompt cache refresh operations.
@@ -135,6 +142,7 @@ class PromptAuditEntry:
         schema_version: Version of the audit entry schema.
         model: Model used for calibration (e.g., 'claude-sonnet-4.5').
     """
+
     timestamp: str
     context_hash: str
     agent_name: str
@@ -410,6 +418,7 @@ Confidence Scoring Guide:
 # DSPY CLIENT CLASS
 # =============================================================================
 
+
 class DSPyClient:
     """Client for DSPy prompt calibration with FAIL-CLOSED caching.
 
@@ -458,8 +467,8 @@ class DSPyClient:
         """
         try:
             # Append to JSONL file
-            with open(self._audit_log_path, 'a', encoding='utf-8') as f:
-                f.write(entry.to_jsonl() + '\n')
+            with open(self._audit_log_path, "a", encoding="utf-8") as f:
+                f.write(entry.to_jsonl() + "\n")
             logger.debug(f"Appended audit entry for {entry.agent_name}")
             return True
         except OSError as e:
@@ -520,7 +529,7 @@ class DSPyClient:
             return None
 
         try:
-            content = cache_path.read_text(encoding='utf-8')
+            content = cache_path.read_text(encoding="utf-8")
             data = json.loads(content)
             cached = CachedPrompt.from_dict(data)
 
@@ -551,7 +560,7 @@ class DSPyClient:
 
         try:
             content = json.dumps(cached.to_dict(), indent=2)
-            cache_path.write_text(content, encoding='utf-8')
+            cache_path.write_text(content, encoding="utf-8")
             logger.info(f"Saved cached prompt to {cache_path}")
             return True
 
@@ -704,7 +713,9 @@ class DSPyClient:
         }
 
         try:
-            logger.info(f"Calling DSPy API for {agent_name} (this takes 30+ seconds)...")
+            logger.info(
+                f"Calling DSPy API for {agent_name} (this takes 30+ seconds)..."
+            )
             response = requests.post(
                 api_url,
                 json=payload,
@@ -782,7 +793,7 @@ class DSPyClient:
 
         for cache_file in cache_files:
             try:
-                content = cache_file.read_text(encoding='utf-8')
+                content = cache_file.read_text(encoding="utf-8")
                 data = json.loads(content)
                 cached = CachedPrompt.from_dict(data)
 
@@ -808,6 +819,7 @@ class DSPyClient:
 # =============================================================================
 # CONVENIENCE FUNCTIONS
 # =============================================================================
+
 
 def get_calibrated_prompt(
     agent_name: str,
