@@ -1,0 +1,13 @@
+{
+  "labels": [
+    {
+      "match": {"category": "style", "severity": "Low"},
+      "expected": "SUPPRESSED",
+      "reason_code": "L2_style_nitpick"
+    }
+  ],
+  "metadata": {
+    "description": "Python file with style nitpicks should be suppressed",
+    "fixture_type": "python"
+  }
+}

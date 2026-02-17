@@ -21,7 +21,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 from finding_filter import (
     FilterAction,
     Finding,
-    FilteredFinding,
     FindingFilter,
     is_shell_strict_mode,
     is_style_nitpick,

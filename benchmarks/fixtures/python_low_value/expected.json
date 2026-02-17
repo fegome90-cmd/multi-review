@@ -1,0 +1,24 @@
+{
+  "labels": [
+    {
+      "match": {"severity": "Low", "confidence_max": 30},
+      "expected": "SUPPRESSED",
+      "reason_code": "L2_LOW_VALUE"
+    },
+    {
+      "match": {"severity": "Suggestion", "confidence_max": 30},
+      "expected": "SUPPRESSED",
+      "reason_code": "L2_LOW_VALUE"
+    },
+    {
+      "match": {"severity": "Info", "confidence_max": 30},
+      "expected": "SUPPRESSED",
+      "reason_code": "L2_LOW_VALUE"
+    }
+  ],
+  "metadata": {
+    "description": "Python file with low value findings (low severity AND low confidence)",
+    "fixture_type": "python",
+    "expected_behavior": "Findings with both low severity AND low confidence (<30) should be suppressed"
+  }
+}

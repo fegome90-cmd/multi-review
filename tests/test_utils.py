@@ -2,7 +2,6 @@
 
 import json
 import logging
-import pytest
 from pathlib import Path
 
 from utils import (
@@ -26,10 +25,10 @@ class TestExitCodes:
 
     def test_exit_codes_class_exists(self):
         """ExitCodes class should be defined."""
-        assert hasattr(ExitCodes, 'SUCCESS')
-        assert hasattr(ExitCodes, 'FAILURE')
-        assert hasattr(ExitCodes, 'INVALID_ARGS')
-        assert hasattr(ExitCodes, 'CONFIG_ERROR')
+        assert hasattr(ExitCodes, "SUCCESS")
+        assert hasattr(ExitCodes, "FAILURE")
+        assert hasattr(ExitCodes, "INVALID_ARGS")
+        assert hasattr(ExitCodes, "CONFIG_ERROR")
 
     def test_exit_codes_class_are_integers(self):
         """ExitCodes class attributes should be integers."""
@@ -102,6 +101,7 @@ class TestSaveReport:
         """save_report should create a report file."""
         # Use tmp_path for isolated testing
         import utils
+
         original_get_reports_dir = utils.get_reports_dir
         utils.get_reports_dir = lambda: tmp_path
 
@@ -117,6 +117,7 @@ class TestSaveReport:
     def test_save_report_includes_timestamp(self, tmp_path):
         """Saved report should include timestamp."""
         import utils
+
         original_get_reports_dir = utils.get_reports_dir
         utils.get_reports_dir = lambda: tmp_path
 
@@ -131,6 +132,7 @@ class TestSaveReport:
     def test_save_report_handles_os_error(self, tmp_path):
         """save_report should handle OS errors gracefully."""
         import utils
+
         original_get_reports_dir = utils.get_reports_dir
 
         # Make directory read-only to cause error
@@ -159,10 +161,7 @@ class TestFormatReportSummary:
     def test_format_report_summary_contains_keys(self):
         """Summary should contain all expected keys."""
         summary = format_report_summary(
-            "quick",
-            ["agent1", "agent2"],
-            issues_found=5,
-            critical_count=1
+            "quick", ["agent1", "agent2"], issues_found=5, critical_count=1
         )
         assert summary["preset"] == "quick"
         assert summary["agents"] == ["agent1", "agent2"]
@@ -209,7 +208,10 @@ class TestCountLinesSafely:
             count = count_lines_safely(temp_file)
             assert count == 0
             # Should log a warning
-            assert any("permission denied" in record.message.lower() for record in caplog.records)
+            assert any(
+                "permission denied" in record.message.lower()
+                for record in caplog.records
+            )
         finally:
             # Restore permissions for cleanup
             temp_file.chmod(0o644)
@@ -225,7 +227,7 @@ class TestCountLinesSafely:
         """Should handle Unicode decode errors gracefully."""
         # Create file with invalid UTF-8
         bad_file = tmp_path / "bad_encoding.txt"
-        bad_file.write_bytes(b'\xff\xfe Invalid UTF-16')
+        bad_file.write_bytes(b"\xff\xfe Invalid UTF-16")
 
         count = count_lines_safely(bad_file)
         assert count == 0
@@ -240,11 +242,14 @@ class TestCountLinesSafely:
 
         # Mock read_text to raise OSError
         import unittest.mock as mock
-        with mock.patch.object(Path, 'read_text', side_effect=OSError("I/O error")):
+
+        with mock.patch.object(Path, "read_text", side_effect=OSError("I/O error")):
             count = count_lines_safely(bad_file)
             assert count == 0
             # Should log a warning about I/O error
-            assert any("i/o error" in record.message.lower() for record in caplog.records)
+            assert any(
+                "i/o error" in record.message.lower() for record in caplog.records
+            )
 
 
 class TestLogReviewSummary:
@@ -272,7 +277,12 @@ class TestLogReviewSummary:
         """Should include report path when provided."""
         report_path = Path("/path/to/report.json")
         with caplog.at_level(logging.INFO):
-            log_review_summary("comprehensive", ["agent1", "agent2"], issues_found=0, report_path=report_path)
+            log_review_summary(
+                "comprehensive",
+                ["agent1", "agent2"],
+                issues_found=0,
+                report_path=report_path,
+            )
 
         assert "Report saved:" in caplog.text
         assert str(report_path) in caplog.text
@@ -288,6 +298,7 @@ class TestValidateFilePathOSError:
         test_file.write_text("test")
 
         import unittest.mock as mock
-        with mock.patch.object(Path, 'exists', side_effect=OSError("System error")):
+
+        with mock.patch.object(Path, "exists", side_effect=OSError("System error")):
             result = validate_file_path(test_file)
             assert result is False

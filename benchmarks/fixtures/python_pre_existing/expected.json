@@ -1,0 +1,21 @@
+{
+  "labels": [
+    {
+      "match": {"file": "legacy.py", "category": "type_annotation"},
+      "expected": "SUPPRESSED",
+      "reason_code": "L2_PRE_EXISTING_CODE",
+      "note": "Confidence should be reduced for pre-existing code"
+    },
+    {
+      "match": {"file": "legacy.py", "description_pattern": "pre-existing|legacy|old"},
+      "expected": "SUPPRESSED",
+      "reason_code": "L2_PRE_EXISTING_CODE"
+    }
+  ],
+  "metadata": {
+    "description": "Pre-existing legacy code - not changed in current PR",
+    "fixture_type": "python",
+    "is_changed_file": false,
+    "expected_behavior": "Findings about pre-existing code should have reduced confidence (to 20)"
+  }
+}

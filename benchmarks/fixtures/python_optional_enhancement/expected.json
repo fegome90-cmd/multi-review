@@ -1,0 +1,25 @@
+{
+  "labels": [
+    {
+      "match": {"description_pattern": "could use|might want|consider|for consistency|optional"},
+      "expected": "SUPPRESSED",
+      "reason_code": "L2_OPTIONAL_ENHANCEMENT",
+      "note": "Confidence should be reduced to 35, not fully suppressed"
+    },
+    {
+      "match": {"description_pattern": "enhancement|improvement|suggestion"},
+      "expected": "SUPPRESSED",
+      "reason_code": "L2_OPTIONAL_ENHANCEMENT"
+    },
+    {
+      "match": {"description_pattern": "could add|might add|potentially"},
+      "expected": "SUPPRESSED",
+      "reason_code": "L2_OPTIONAL_ENHANCEMENT"
+    }
+  ],
+  "metadata": {
+    "description": "Optional enhancement suggestions - valid but not actionable",
+    "fixture_type": "python",
+    "expected_behavior": "Optional enhancement findings should have confidence reduced to 35"
+  }
+}

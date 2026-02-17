@@ -1,0 +1,34 @@
+{
+  "labels": [
+    {
+      "match": {"category": "security", "severity": "Critical"},
+      "expected": "TP",
+      "reason_code": null
+    },
+    {
+      "match": {"severity": "Low", "description_pattern": "naming|style|format"},
+      "expected": "SUPPRESSED",
+      "reason_code": "L2_STYLE_NITPICK"
+    },
+    {
+      "match": {"category": "error_handling", "severity": "Important"},
+      "expected": "TP",
+      "reason_code": null
+    },
+    {
+      "match": {"severity": "Low", "confidence_max": 30},
+      "expected": "SUPPRESSED",
+      "reason_code": "L2_LOW_VALUE"
+    },
+    {
+      "match": {"description_pattern": "could add|optional|enhancement|improvement"},
+      "expected": "SUPPRESSED",
+      "reason_code": "L2_OPTIONAL_ENHANCEMENT"
+    }
+  ],
+  "metadata": {
+    "description": "Mixed findings - critical issues kept, style/low-value suppressed",
+    "fixture_type": "python",
+    "expected_behavior": "Critical/Important findings kept, style nitpicks and optional enhancements suppressed"
+  }
+}

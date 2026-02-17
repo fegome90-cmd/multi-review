@@ -1,0 +1,20 @@
+{
+  "labels": [
+    {
+      "match": {"category": "error_handling", "file": "script.sh"},
+      "expected": "TP",
+      "reason_code": null
+    },
+    {
+      "match": {"description_pattern": "missing.*check|error handling|exit code", "file": "script.sh"},
+      "expected": "TP",
+      "reason_code": null
+    }
+  ],
+  "metadata": {
+    "description": "Shell script WITHOUT strict mode. Error handling findings should be TRUE POSITIVES.",
+    "fixture_type": "shell",
+    "strict_mode": false,
+    "expected_behavior": "Error handling findings should NOT be suppressed since no strict mode"
+  }
+}

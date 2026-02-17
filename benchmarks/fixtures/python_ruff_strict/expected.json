@@ -1,0 +1,18 @@
+{
+  "labels": [
+    {
+      "match": {"category": "lint"},
+      "expected": "SUPPRESSED",
+      "reason_code": "L2_tool_already_catches"
+    },
+    {
+      "match": {"category": "type_annotation", "file": "example.py"},
+      "expected": "SUPPRESSED",
+      "reason_code": "L2_tool_already_catches"
+    }
+  ],
+  "metadata": {
+    "description": "Python file with issues ruff/mypy would catch",
+    "fixture_type": "python"
+  }
+}

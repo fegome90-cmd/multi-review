@@ -15,12 +15,16 @@ Dependencies:
     - project_context.py (for ProjectContext)
 """
 
-import dataclasses
+import json
 import logging
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 from typing import Any, Callable, Dict, FrozenSet, List, Optional, Tuple
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from project_context import ProjectContext
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +33,7 @@ logger = logging.getLogger(__name__)
 # FILTER ACTION ENUM
 # =============================================================================
 
+
 class FilterAction(Enum):
     """Actions that can be taken on a finding.
 
@@ -36,6 +41,7 @@ class FilterAction(Enum):
         SUPPRESS: Remove from output entirely (log reason)
         SET_CONFIDENCE: Set confidence to a specific value
     """
+
     SUPPRESS = "suppress"
     SET_CONFIDENCE = "set_confidence"
 
@@ -43,6 +49,7 @@ class FilterAction(Enum):
 # =============================================================================
 # SUPPRESSION REASON CODES (Namespaced by Layer)
 # =============================================================================
+
 
 class SuppressionReasonCode(Enum):
     """Canonical reason codes with layer namespace.
@@ -66,6 +73,7 @@ class SuppressionReasonCode(Enum):
         L3_TOOL_TIMEOUT: Tool timed out during validation.
         L3_TOOL_MISSING: Tool not installed or available.
     """
+
     # Layer 2: Mechanical Filtering
     L2_SHELL_STRICT_MODE = "L2_shell_strict_mode"
     L2_STYLE_NITPICK = "L2_style_nitpick"
@@ -88,6 +96,7 @@ class SuppressionReasonCode(Enum):
 # FINDING DATACLASS
 # =============================================================================
 
+
 @dataclass(frozen=True)
 class Finding:
     """A code review finding from an agent.
@@ -104,6 +113,7 @@ class Finding:
         evidence_refs: Links to tool outputs or other evidence.
         source_agent: Name of the agent that found this issue.
     """
+
     id: str
     file: str
     line: int
@@ -148,7 +158,7 @@ def is_shell_strict_mode(finding: Finding, context: "ProjectContext") -> bool:
         True if finding is in a strict-mode shell file about error handling.
     """
     # Check if it's a shell file
-    shell_extensions = {'.sh', '.bash', '.zsh'}
+    shell_extensions = {".sh", ".bash", ".zsh"}
     file_path = Path(finding.file)
 
     if file_path.suffix not in shell_extensions:
@@ -161,12 +171,12 @@ def is_shell_strict_mode(finding: Finding, context: "ProjectContext") -> bool:
             return False
 
     # Check if the finding is about error handling
-    error_categories = {'error_handling', 'error-handling', 'error handling'}
+    error_categories = {"error_handling", "error-handling", "error handling"}
     if finding.category.lower() in error_categories:
         return True
 
     # Also check description for error-related terms
-    error_terms = {'error handling', 'error check', 'exit code', 'error condition'}
+    error_terms = {"error handling", "error check", "exit code", "error condition"}
     desc_lower = finding.description.lower()
     if any(term in desc_lower for term in error_terms):
         return True
@@ -188,15 +198,24 @@ def is_style_nitpick(finding: Finding, context: "ProjectContext") -> bool:
         True if finding is a style nitpick.
     """
     # Must be low severity
-    if finding.severity.lower() != 'low':
+    if finding.severity.lower() != "low":
         return False
 
     # Check for nitpick-related terms in description
     nitpick_terms = {
-        'naming', 'style', 'format', 'formatting',
-        'redundant', 'unused', 'unnecessary',
-        'prefer', 'consider', 'could be',
-        'whitespace', 'indentation', 'line length',
+        "naming",
+        "style",
+        "format",
+        "formatting",
+        "redundant",
+        "unused",
+        "unnecessary",
+        "prefer",
+        "consider",
+        "could be",
+        "whitespace",
+        "indentation",
+        "line length",
     }
 
     desc_lower = finding.description.lower()
@@ -216,10 +235,18 @@ def is_optional_enhancement(finding: Finding, context: "ProjectContext") -> bool
         True if finding is an optional enhancement.
     """
     enhancement_terms = {
-        'could', 'might', 'consider', 'optional',
-        'enhancement', 'improvement', 'suggestion',
-        'could use', 'could add', 'might want',
-        'for consistency', 'for clarity',
+        "could",
+        "might",
+        "consider",
+        "optional",
+        "enhancement",
+        "improvement",
+        "suggestion",
+        "could use",
+        "could add",
+        "might want",
+        "for consistency",
+        "for clarity",
     }
 
     desc_lower = finding.description.lower()
@@ -240,7 +267,7 @@ def is_internal_helper(finding: Finding, context: "ProjectContext") -> bool:
         True if finding is about internal helper and mypy is not strict.
     """
     # Only applies to type annotation findings
-    type_categories = {'type_annotation', 'type-annotation', 'typing'}
+    type_categories = {"type_annotation", "type-annotation", "typing"}
     if finding.category.lower() not in type_categories:
         return False
 
@@ -249,7 +276,7 @@ def is_internal_helper(finding: Finding, context: "ProjectContext") -> bool:
         return False
 
     # Check if description mentions internal/private functions
-    internal_terms = {'internal', 'private', 'helper', '_'}
+    internal_terms = {"internal", "private", "helper", "_"}
     desc_lower = finding.description.lower()
 
     # Check if it's about a function starting with underscore
@@ -257,7 +284,7 @@ def is_internal_helper(finding: Finding, context: "ProjectContext") -> bool:
         return True
 
     # Check if the file contains underscore-prefixed names in the description
-    if '_' in finding.description:
+    if "_" in finding.description:
         # Likely about an internal function
         return True
 
@@ -300,7 +327,7 @@ def is_low_value_finding(finding: Finding, context: "ProjectContext") -> bool:
     Returns:
         True if finding has both low confidence and low severity.
     """
-    low_severity = finding.severity.lower() in {'low', 'suggestion', 'info'}
+    low_severity = finding.severity.lower() in {"low", "suggestion", "info"}
     low_confidence = finding.confidence < 30
 
     return low_severity and low_confidence
@@ -319,12 +346,12 @@ def is_tool_already_catches(finding: Finding, context: "ProjectContext") -> bool
         True if an existing tool would catch this.
     """
     # Type annotation issues with mypy configured
-    if finding.category.lower() in {'type_annotation', 'typing'}:
+    if finding.category.lower() in {"type_annotation", "typing"}:
         if context.python_config.mypy_configured.value:
             return True
 
     # Linting issues with ruff configured
-    if finding.category.lower() in {'lint', 'style', 'code_quality'}:
+    if finding.category.lower() in {"lint", "style", "code_quality"}:
         if context.python_config.ruff_rules:
             return True
 
@@ -337,12 +364,20 @@ def is_tool_already_catches(finding: Finding, context: "ProjectContext") -> bool
 
 # Filter rules are (predicate, action, reason, confidence_value, reason_code, rule_id) tuples
 # The action can be SUPPRESS or SET_CONFIDENCE(value)
-FilterRule = Tuple[PredicateFn, FilterAction, str, Optional[int], Optional[SuppressionReasonCode], Optional[str]]
+FilterRule = Tuple[
+    PredicateFn,
+    FilterAction,
+    str,
+    Optional[int],
+    Optional[SuppressionReasonCode],
+    Optional[str],
+]
 
 
 # =============================================================================
 # LEARNED PATTERN PREDICATES
 # =============================================================================
+
 
 def make_pattern_predicate(pattern_name: str, category: str) -> PredicateFn:
     """Create a predicate function for a learned pattern.
@@ -354,6 +389,7 @@ def make_pattern_predicate(pattern_name: str, category: str) -> PredicateFn:
     Returns:
         Predicate function for this pattern.
     """
+
     def matches_learned_pattern(finding: Finding, context: "ProjectContext") -> bool:
         """Check if finding matches a learned pattern."""
         # Pattern-to-keyword mapping
@@ -419,15 +455,19 @@ def _load_learned_patterns() -> List[FilterRule]:
                     # Create predicate for this pattern
                     predicate = make_pattern_predicate(pattern_name, category)
 
-                    learned_rules.append((
-                        predicate,
-                        FilterAction.SUPPRESS,
-                        f"Learned pattern ({count} FPs): {pattern_name}",
-                        None,
-                        SuppressionReasonCode.L2_LEARNED_PATTERN,
-                        f"L2_rule_learned_{pattern_name}",
-                    ))
-                    logger.debug(f"Loaded learned pattern: {pattern_name} for {agent_name}")
+                    learned_rules.append(
+                        (
+                            predicate,
+                            FilterAction.SUPPRESS,
+                            f"Learned pattern ({count} FPs): {pattern_name}",
+                            None,
+                            SuppressionReasonCode.L2_LEARNED_PATTERN,
+                            f"L2_rule_learned_{pattern_name}",
+                        )
+                    )
+                    logger.debug(
+                        f"Loaded learned pattern: {pattern_name} for {agent_name}"
+                    )
 
     except ImportError as e:
         logger.info(f"Feedback manager not available, skipping learned patterns: {e}")
@@ -455,7 +495,6 @@ def _get_default_filter_rules() -> List[FilterRule]:
             SuppressionReasonCode.L2_SHELL_STRICT_MODE,
             "L2_rule_shell_strict",
         ),
-
         # Style nitpicks: suppress low-severity style issues
         (
             is_style_nitpick,
@@ -465,7 +504,6 @@ def _get_default_filter_rules() -> List[FilterRule]:
             SuppressionReasonCode.L2_STYLE_NITPICK,
             "L2_rule_style",
         ),
-
         # Internal helpers without strict mypy: suppress type annotation findings
         (
             is_internal_helper,
@@ -475,7 +513,6 @@ def _get_default_filter_rules() -> List[FilterRule]:
             SuppressionReasonCode.L2_INTERNAL_HELPER,
             "L2_rule_internal",
         ),
-
         # Low value findings: suppress
         (
             is_low_value_finding,
@@ -485,7 +522,6 @@ def _get_default_filter_rules() -> List[FilterRule]:
             SuppressionReasonCode.L2_LOW_VALUE,
             "L2_rule_low_value",
         ),
-
         # Tool already catches: suppress (redundant)
         (
             is_tool_already_catches,
@@ -495,7 +531,6 @@ def _get_default_filter_rules() -> List[FilterRule]:
             SuppressionReasonCode.L2_TOOL_ALREADY_CATCHES,
             "L2_rule_tool_catches",
         ),
-
         # Optional enhancements: reduce confidence (not suppress)
         (
             is_optional_enhancement,
@@ -505,7 +540,6 @@ def _get_default_filter_rules() -> List[FilterRule]:
             SuppressionReasonCode.L2_OPTIONAL_ENHANCEMENT,
             "L2_rule_optional",
         ),
-
         # Pre-existing issues: reduce confidence significantly
         (
             is_pre_existing_issue,
@@ -530,6 +564,7 @@ def _get_default_filter_rules() -> List[FilterRule]:
 # FILTER RESULT
 # =============================================================================
 
+
 @dataclass(frozen=True)
 class FilteredFinding:
     """A finding after filtering has been applied.
@@ -542,6 +577,7 @@ class FilteredFinding:
         reason_code: Canonical reason code (L2_* or L3_*).
         filter_rule_id: Identifier for the filter rule that matched (e.g., "L2_rule_shell_strict").
     """
+
     finding: Finding
     action: FilterAction
     reason: str
@@ -559,6 +595,7 @@ class FilteredFinding:
 # FINDING FILTER CLASS
 # =============================================================================
 
+
 class FindingFilter:
     """Filter findings based on project context and typed predicates.
 
@@ -575,9 +612,7 @@ class FindingFilter:
     """
 
     def __init__(
-        self,
-        context: "ProjectContext",
-        filter_rules: Optional[List[FilterRule]] = None
+        self, context: "ProjectContext", filter_rules: Optional[List[FilterRule]] = None
     ):
         """Initialize the filter.
 
@@ -611,9 +646,7 @@ class FindingFilter:
             try:
                 if predicate(finding, self.context):
                     if action == FilterAction.SUPPRESS:
-                        logger.debug(
-                            f"Suppressing finding {finding.id}: {reason}"
-                        )
+                        logger.debug(f"Suppressing finding {finding.id}: {reason}")
                         return FilteredFinding(
                             finding=finding,
                             action=action,
@@ -623,7 +656,11 @@ class FindingFilter:
                             filter_rule_id=rule_id,
                         )
                     elif action == FilterAction.SET_CONFIDENCE:
-                        new_confidence = confidence_value if confidence_value is not None else finding.confidence
+                        new_confidence = (
+                            confidence_value
+                            if confidence_value is not None
+                            else finding.confidence
+                        )
                         # Ensure minimum confidence of 25 (never suppress via confidence)
                         new_confidence = max(25, min(100, new_confidence))
                         logger.debug(
@@ -639,9 +676,7 @@ class FindingFilter:
                             filter_rule_id=rule_id,
                         )
             except Exception as e:
-                logger.warning(
-                    f"Error applying filter rule to {finding.id}: {e}"
-                )
+                logger.warning(f"Error applying filter rule to {finding.id}: {e}")
                 continue
 
         # No rule matched - keep original
@@ -690,8 +725,7 @@ class FindingFilter:
         return [f for f in all_filtered if f.is_suppressed]
 
     def categorize_findings(
-        self,
-        findings: List[Finding]
+        self, findings: List[Finding]
     ) -> Dict[str, List[FilteredFinding]]:
         """Categorize findings by severity and filtered confidence.
 
@@ -756,7 +790,6 @@ class FindingFilter:
             "suggestions": len(categories["suggestions"]),
             "suppression_reasons": suppression_reasons,
             "filter_effectiveness": (
-                len(categories["suppressed"]) / len(findings) * 100
-                if findings else 0
+                len(categories["suppressed"]) / len(findings) * 100 if findings else 0
             ),
         }

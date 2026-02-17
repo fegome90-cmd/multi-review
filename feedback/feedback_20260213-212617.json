@@ -1,0 +1,14 @@
+{
+  "feedback_id": "fb-20260213-212617-6a698d",
+  "timestamp": "2026-02-13T21:26:17.539548",
+  "finding_id": "test-1",
+  "file": "src/auth.py",
+  "severity": "Low",
+  "confidence": 50,
+  "line": 45,
+  "category": "security",
+  "description": "SQL injection risk - already handled by ORM",
+  "source_agent": "feature-dev:code-reviewer",
+  "feedback_type": "false_positive",
+  "reason": "Already handled by ORM"
+}
