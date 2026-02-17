@@ -15,10 +15,9 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install uv
-        run: curl -LsSf https://astral.sh/uv/install.sh | sh
-
-      - name: Add uv to PATH
-        run: echo "$HOME/.local/bin" >> $GITHUB_PATH
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.10.2"
 
       - name: Install dependencies
         run: uv sync --dev
@@ -32,10 +31,9 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install uv
-        run: curl -LsSf https://astral.sh/uv/install.sh | sh
-
-      - name: Add uv to PATH
-        run: echo "$HOME/.local/bin" >> $GITHUB_PATH
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.10.2"
 
       - name: Install dependencies
         run: uv sync --dev
@@ -50,17 +48,12 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install uv
-        run: curl -LsSf https://astral.sh/uv/install.sh | sh
-
-      - name: Add uv to PATH
-        run: echo "$HOME/.local/bin" >> $GITHUB_PATH
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.10.2"
 
       - name: Install dependencies
         run: uv sync --dev
-
-      - name: Install tools
-        run: |
-          pip install ruff mypy
 
       - name: Run quick benchmark
         run: make bench-quick
@@ -84,17 +77,12 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install uv
-        run: curl -LsSf https://astral.sh/uv/install.sh | sh
-
-      - name: Add uv to PATH
-        run: echo "$HOME/.local/bin" >> $GITHUB_PATH
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.10.2"
 
       - name: Install dependencies
         run: uv sync --dev
-
-      - name: Install tools
-        run: |
-          pip install ruff mypy
 
       - name: Run full benchmark
         run: make bench-full

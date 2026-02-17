@@ -349,7 +349,7 @@ class TestDSPyClientCacheErrors:
 
         # Create corrupted cache file
         cache_file = temp_cache_dir / "corrupted.json"
-        cache_file.write_text("{ invalid json }", encoding='utf-8')
+        cache_file.write_text("{ invalid json }", encoding="utf-8")
 
         # Should return None without crashing
         loaded = client._load_cached_prompt("corrupted")
@@ -370,7 +370,7 @@ class TestDSPyClientCacheErrors:
             "ttl_days": 7,
             "integrity_hash": "wrong_hash_123",  # Wrong hash
         }
-        cache_file.write_text(json.dumps(data), encoding='utf-8')
+        cache_file.write_text(json.dumps(data), encoding="utf-8")
 
         # Should return None when integrity fails
         loaded = client._load_cached_prompt("tampered")
@@ -391,7 +391,7 @@ class TestDSPyClientCacheErrors:
             "ttl_days": 7,
             "integrity_hash": hashlib.sha256(b"prompt").hexdigest()[:16],
         }
-        cache_file.write_text(json.dumps(data), encoding='utf-8')
+        cache_file.write_text(json.dumps(data), encoding="utf-8")
 
         # Should load but be expired
         loaded = client._load_cached_prompt("bad-date")
@@ -411,7 +411,7 @@ class TestDSPyClientCacheErrors:
             "guardrails": [],
             "created_at": datetime.now().isoformat(),
         }
-        cache_file.write_text(json.dumps(data), encoding='utf-8')
+        cache_file.write_text(json.dumps(data), encoding="utf-8")
 
         # Should return None due to TypeError from from_dict
         loaded = client._load_cached_prompt("incomplete")
@@ -521,7 +521,7 @@ class TestDSPyClientCacheErrors:
         client._save_cached_prompt(expired_cached)
 
         # 3. Corrupted JSON
-        (temp_cache_dir / "corrupted.json").write_text("{bad}", encoding='utf-8')
+        (temp_cache_dir / "corrupted.json").write_text("{bad}", encoding="utf-8")
 
         # 4. Tampered integrity
         tampered_data = {
@@ -534,7 +534,7 @@ class TestDSPyClientCacheErrors:
             "integrity_hash": "wrong",
         }
         (temp_cache_dir / "tampered.json").write_text(
-            json.dumps(tampered_data), encoding='utf-8'
+            json.dumps(tampered_data), encoding="utf-8"
         )
 
         stats = client.get_cache_stats()
@@ -569,7 +569,7 @@ class TestDSPyClientCacheErrors:
                 mock_path.name = path.name
                 yield mock_path
 
-        with patch.object(Path, 'glob', lambda self, p: mock_glob(p)):
+        with patch.object(Path, "glob", lambda self, p: mock_glob(p)):
             # Should not crash, just log warning
             count = client.clear_cache()
 
@@ -586,7 +586,7 @@ class TestDSPyClientRefreshAPI:
         with tempfile.TemporaryDirectory() as tmpdir:
             yield Path(tmpdir)
 
-    @patch('builtins.__import__', side_effect=ImportError)
+    @patch.dict("sys.modules", {"requests": None})
     def test_refresh_from_api_without_requests(self, mock_import, temp_cache_dir):
         """Test refresh_from_api returns None when requests not available."""
         client = DSPyClient(cache_dir=temp_cache_dir)
@@ -594,7 +594,7 @@ class TestDSPyClientRefreshAPI:
         result = client.refresh_from_api("test-agent", mock_context)
         assert result is None
 
-    @patch.dict('sys.modules', {'requests': None})
+    @patch.dict("sys.modules", {"requests": None})
     def test_refresh_from_api_no_requests_module(self, temp_cache_dir):
         """Test refresh_from_api when requests module is not available."""
         client = DSPyClient(cache_dir=temp_cache_dir)
@@ -620,7 +620,7 @@ class TestRuntimeZeroAPICalls:
         mock_context.to_context_hash.return_value = "test_hash_123"
 
         # Mock the requests module at the class level
-        with patch.object(client, 'refresh_from_api') as mock_refresh:
+        with patch.object(client, "refresh_from_api") as mock_refresh:
             # Build the prompt (runtime operation)
             prompt = client.build_review_prompt("test-agent", mock_context)
 
@@ -638,7 +638,7 @@ class TestRuntimeZeroAPICalls:
 
         # Track if any method that could lead to API calls is invoked
         # build_review_prompt should only call _load_cached_prompt
-        with patch.object(client, '_load_cached_prompt') as mock_load:
+        with patch.object(client, "_load_cached_prompt") as mock_load:
             mock_load.return_value = None  # Cache miss
 
             prompt = client.build_review_prompt("test-agent", mock_context)
@@ -655,7 +655,7 @@ class TestRuntimeZeroAPICalls:
         mock_context = MagicMock()
         mock_context.to_context_hash.return_value = "hash456"
 
-        with patch.object(client, '_load_cached_prompt') as mock_load:
+        with patch.object(client, "_load_cached_prompt") as mock_load:
             mock_load.return_value = None  # Cache miss
 
             guardrails = client.get_guardrails("test-agent", mock_context)

@@ -38,6 +38,7 @@ FP_THRESHOLD = 3
 # FEEDBACK TYPE ENUM
 # =============================================================================
 
+
 class FeedbackType(Enum):
     """Types of feedback for a finding.
 
@@ -47,6 +48,7 @@ class FeedbackType(Enum):
         ALREADY_FIXED: Issue was already addressed elsewhere.
         NOT_ACTIONABLE: Finding is correct but not worth addressing.
     """
+
     REAL_ISSUE = "real_issue"
     FALSE_POSITIVE = "false_positive"
     ALREADY_FIXED = "already_fixed"
@@ -56,6 +58,7 @@ class FeedbackType(Enum):
 # =============================================================================
 # FEEDBACK ENTRY DATACLASS
 # =============================================================================
+
 
 @dataclass(frozen=True)
 class FeedbackEntry:
@@ -72,7 +75,10 @@ class FeedbackEntry:
         source_agent: Agent that produced the finding.
         feedback_type: Type of feedback given.
         reason: Optional reason for the feedback.
+        severity: Finding severity level.
+        confidence: Finding confidence score.
     """
+
     feedback_id: str
     timestamp: str
     finding_id: str
@@ -83,6 +89,8 @@ class FeedbackEntry:
     source_agent: str
     feedback_type: FeedbackType
     reason: Optional[str] = None
+    severity: str = "Low"
+    confidence: int = 50
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
@@ -91,8 +99,6 @@ class FeedbackEntry:
             "timestamp": self.timestamp,
             "finding_id": self.finding_id,
             "file": self.file,
-            "severity": getattr(self, 'severity', 'Low'),
-            "confidence": getattr(self, 'confidence', 50),
             "line": self.line,
             "category": self.category,
             "description": self.description,
@@ -122,6 +128,7 @@ class FeedbackEntry:
 # AGENT CALIBRATION DATACLASS
 # =============================================================================
 
+
 @dataclass
 class AgentCalibration:
     """Calibration data for a single agent.
@@ -138,6 +145,7 @@ class AgentCalibration:
         pattern_learnings: List of learned patterns to suppress.
         confidence_adjustment: Overall confidence adjustment factor.
     """
+
     agent_name: str
     total_findings: int = 0
     real_issues: int = 0
@@ -205,6 +213,7 @@ class AgentCalibration:
 # =============================================================================
 # FEEDBACK MANAGER CLASS
 # =============================================================================
+
 
 class FeedbackManager:
     """Manager for feedback collection and calibration.
@@ -293,6 +302,8 @@ class FeedbackManager:
             source_agent=source_agent,
             feedback_type=feedback_type,
             reason=reason,
+            severity=severity,
+            confidence=confidence,
         )
 
         # Save individual feedback entry
@@ -322,7 +333,7 @@ class FeedbackManager:
         filepath = self.feedback_dir / filename
 
         try:
-            with open(filepath, 'w', encoding='utf-8') as f:
+            with open(filepath, "w", encoding="utf-8") as f:
                 json.dump(entry.to_dict(), f, indent=2)
             logger.debug(f"Saved feedback entry to {filepath}")
         except OSError as e:
@@ -372,7 +383,9 @@ class FeedbackManager:
         real = agent_cal["real_issues"]
         fp = agent_cal["false_positives"]
         # Adjustment: boost if accurate, reduce if many FPs
-        agent_cal["confidence_adjustment"] = max(0.5, min(1.0, (real + 0.5) / (total - fp * 0.5)))
+        agent_cal["confidence_adjustment"] = max(
+            0.5, min(1.0, (real + 0.5) / (total - fp * 0.5))
+        )
 
         agent_calibrations[entry.source_agent] = agent_cal
         calibration["agent_calibrations"] = agent_calibrations
@@ -410,18 +423,23 @@ class FeedbackManager:
 
         if existing:
             existing["count"] = existing.get("count", 0) + 1
-            if existing["count"] >= FP_THRESHOLD and existing.get("action") != "suppress":
+            if (
+                existing["count"] >= FP_THRESHOLD
+                and existing.get("action") != "suppress"
+            ):
                 existing["action"] = "suppress"
                 logger.info(
                     f"Learned suppression pattern for {entry.source_agent}: {pattern}"
                 )
         else:
-            patterns.append({
-                "pattern": pattern,
-                "category": entry.category,
-                "count": 1,
-                "action": "count",  # Just counting for now
-            })
+            patterns.append(
+                {
+                    "pattern": pattern,
+                    "category": entry.category,
+                    "count": 1,
+                    "action": "count",  # Just counting for now
+                }
+            )
 
         agent_cal["pattern_learnings"] = patterns
 
@@ -479,7 +497,7 @@ class FeedbackManager:
             }
 
         try:
-            with open(self.calibration_file, 'r', encoding='utf-8') as f:
+            with open(self.calibration_file, "r", encoding="utf-8") as f:
                 return json.load(f)
         except (OSError, json.JSONDecodeError) as e:
             logger.warning(f"Failed to load calibration: {e}")
@@ -511,7 +529,7 @@ class FeedbackManager:
             calibration: Calibration dictionary to save.
         """
         try:
-            with open(self.calibration_file, 'w', encoding='utf-8') as f:
+            with open(self.calibration_file, "w", encoding="utf-8") as f:
                 json.dump(calibration, f, indent=2)
             logger.debug(f"Saved calibration to {self.calibration_file}")
         except OSError as e:
@@ -558,7 +576,9 @@ class FeedbackManager:
             "total_findings_reviewed": total_findings,
             "total_real_issues": total_real,
             "total_false_positives": total_fp,
-            "overall_accuracy": total_real / total_findings if total_findings > 0 else 0,
+            "overall_accuracy": total_real / total_findings
+            if total_findings > 0
+            else 0,
             "fp_rate": total_fp / total_findings if total_findings > 0 else 0,
             "learned_patterns": total_patterns,
             "agents_with_feedback": len(agent_cals),
@@ -569,6 +589,7 @@ class FeedbackManager:
 # =============================================================================
 # CONVENIENCE FUNCTIONS
 # =============================================================================
+
 
 def get_feedback_manager() -> FeedbackManager:
     """Get a FeedbackManager instance.

@@ -30,9 +30,11 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from feedback_manager import (
     FeedbackManager,
-    FeedbackType,
     AgentCalibration,
+    FeedbackType,
 )
+
+from utils import ExitCodes
 
 
 def record_feedback(
@@ -56,13 +58,24 @@ def record_feedback(
         finding = json.loads(finding_json)
     except json.JSONDecodeError as e:
         print(f"Error: Invalid JSON for finding: {e}", file=sys.stderr)
-        return 2
+        return ExitCodes.INVALID_ARGS
 
     try:
         fb_type = FeedbackType(feedback_type.lower())
     except ValueError:
         valid_types = [t.value for t in FeedbackType]
-        print(f"Error: Invalid feedback type. Valid types: {valid_types}", file=sys.stderr)
+        print(
+            f"Error: Invalid feedback type. Valid types: {valid_types}", file=sys.stderr
+        )
+        return ExitCodes.INVALID_ARGS
+
+    try:
+        fb_type = FeedbackType(feedback_type.lower())
+    except ValueError:
+        valid_types = [t.value for t in FeedbackType]
+        print(
+            f"Error: Invalid feedback type. Valid types: {valid_types}", file=sys.stderr
+        )
         return 2
 
     entry = manager.record_feedback(
@@ -85,7 +98,7 @@ def record_feedback(
     if entry.reason:
         print(f"  Reason: {entry.reason}")
 
-    return 0
+    return ExitCodes.SUCCESS
 
 
 def show_stats(manager: FeedbackManager) -> int:
@@ -108,10 +121,10 @@ def show_stats(manager: FeedbackManager) -> int:
     print(f"False positive rate: {stats['fp_rate']:.1%}")
     print(f"Learned patterns: {stats['learned_patterns']}")
     print(f"Agents with feedback: {stats['agents_with_feedback']}")
-    if stats['last_updated']:
+    if stats["last_updated"]:
         print(f"Last updated: {stats['last_updated']}")
 
-    return 0
+    return ExitCodes.SUCCESS
 
 
 def show_agent(manager: FeedbackManager, agent_name: str) -> int:
@@ -145,7 +158,7 @@ def show_agent(manager: FeedbackManager, agent_name: str) -> int:
             pat = pattern.get("pattern", "unknown")
             print(f"  - {pat}: {count} occurrences [{action}]")
 
-    return 0
+    return ExitCodes.SUCCESS
 
 
 def main() -> int:
@@ -156,35 +169,25 @@ def main() -> int:
     # Main actions (mutually exclusive)
     action_group = parser.add_mutually_exclusive_group(required=True)
     action_group.add_argument(
-        "--record",
-        action="store_true",
-        help="Record feedback for a finding"
+        "--record", action="store_true", help="Record feedback for a finding"
     )
     action_group.add_argument(
-        "--stats",
-        action="store_true",
-        help="Show calibration statistics"
+        "--stats", action="store_true", help="Show calibration statistics"
     )
     action_group.add_argument(
-        "--agent",
-        metavar="NAME",
-        help="Show calibration for a specific agent"
+        "--agent", metavar="NAME", help="Show calibration for a specific agent"
     )
 
     # Options for --record
     parser.add_argument(
-        "--finding-json",
-        help="JSON string with finding data (for --record)"
+        "--finding-json", help="JSON string with finding data (for --record)"
     )
     parser.add_argument(
         "--feedback-type",
         choices=["real_issue", "false_positive", "already_fixed", "not_actionable"],
-        help="Type of feedback (for --record)"
+        help="Type of feedback (for --record)",
     )
-    parser.add_argument(
-        "--reason",
-        help="Reason for the feedback (optional)"
-    )
+    parser.add_argument("--reason", help="Reason for the feedback (optional)")
 
     args = parser.parse_args()
     manager = FeedbackManager()
@@ -192,11 +195,13 @@ def main() -> int:
     if args.record:
         if not args.finding_json:
             print("Error: --finding-json is required for --record", file=sys.stderr)
-            return 2
+            return ExitCodes.INVALID_ARGS
         if not args.feedback_type:
             print("Error: --feedback-type is required for --record", file=sys.stderr)
-            return 2
-        return record_feedback(manager, args.finding_json, args.feedback_type, args.reason)
+            return ExitCodes.INVALID_ARGS
+        return record_feedback(
+            manager, args.finding_json, args.feedback_type, args.reason
+        )
 
     elif args.stats:
         return show_stats(manager)
@@ -204,7 +209,7 @@ def main() -> int:
     elif args.agent:
         return show_agent(manager, args.agent)
 
-    return 0
+    return ExitCodes.SUCCESS
 
 
 if __name__ == "__main__":

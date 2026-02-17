@@ -384,7 +384,7 @@ class TestApplyFiltering:
         ]
 
         # Mock ValidationPass to avoid subprocess calls
-        with patch('finding_aggregator.ValidationPass') as mock_validation:
+        with patch("finding_aggregator.ValidationPass") as mock_validation:
             mock_validator = MagicMock()
             mock_validation.return_value = mock_validator
             # Return validated findings with updated evidence refs
@@ -492,9 +492,7 @@ class TestFormatResults:
                 "critical": [],
                 "important": [],
                 "suggestions": [],
-                "suppressed": [
-                    {"finding": finding, "reason": "Low value finding"}
-                ],
+                "suppressed": [{"finding": finding, "reason": "Low value finding"}],
             },
             "summary": {
                 "total_findings": 1,
@@ -703,12 +701,18 @@ class TestMainCLI:
 
     def test_main_with_json_output(self, temp_files, capsys):
         """Test main with JSON output format."""
-        with patch("sys.argv", [
-            "finding_aggregator.py",
-            "--context-json", str(temp_files["context"]),
-            "--findings-json", str(temp_files["findings"]),
-            "--output-format", "json",
-        ]):
+        with patch(
+            "sys.argv",
+            [
+                "finding_aggregator.py",
+                "--context-json",
+                str(temp_files["context"]),
+                "--findings-json",
+                str(temp_files["findings"]),
+                "--output-format",
+                "json",
+            ],
+        ):
             try:
                 main()
             except SystemExit as e:
@@ -719,20 +723,27 @@ class TestMainCLI:
         captured = capsys.readouterr()
         # Should output JSON or process findings
         output = captured.out
-        assert ("{" in output or "No findings" in output or "summary" in output.lower())
+        assert "{" in output or "No findings" in output or "summary" in output.lower()
 
     def test_main_with_markdown_output(self, temp_files, capsys):
         """Test main with markdown output format."""
-        with patch("sys.argv", [
-            "finding_aggregator.py",
-            "--context-json", str(temp_files["context"]),
-            "--findings-json", str(temp_files["findings"]),
-            "--output-format", "markdown",
-        ]):
+        with patch(
+            "sys.argv",
+            [
+                "finding_aggregator.py",
+                "--context-json",
+                str(temp_files["context"]),
+                "--findings-json",
+                str(temp_files["findings"]),
+                "--output-format",
+                "markdown",
+            ],
+        ):
             try:
                 main()
-            except SystemExit:
-                pass
+            except SystemExit as e:
+                if e.code != 0:
+                    raise
 
         captured = capsys.readouterr()
         # Should output markdown
@@ -740,10 +751,14 @@ class TestMainCLI:
 
     def test_main_exits_on_missing_context(self, capsys):
         """Test main exits when context file missing."""
-        with patch("sys.argv", [
-            "finding_aggregator.py",
-            "--context-json", "/nonexistent/context.json",
-        ]):
+        with patch(
+            "sys.argv",
+            [
+                "finding_aggregator.py",
+                "--context-json",
+                "/nonexistent/context.json",
+            ],
+        ):
             with pytest.raises(SystemExit) as exc:
                 main()
             assert exc.value.code == 1
@@ -754,11 +769,16 @@ class TestMainCLI:
         empty_findings = temp_files["dir"] / "empty.json"
         empty_findings.write_text("[]")
 
-        with patch("sys.argv", [
-            "finding_aggregator.py",
-            "--context-json", str(temp_files["context"]),
-            "--findings-json", str(empty_findings),
-        ]):
+        with patch(
+            "sys.argv",
+            [
+                "finding_aggregator.py",
+                "--context-json",
+                str(temp_files["context"]),
+                "--findings-json",
+                str(empty_findings),
+            ],
+        ):
             with pytest.raises(SystemExit) as exc:
                 main()
             assert exc.value.code == 0

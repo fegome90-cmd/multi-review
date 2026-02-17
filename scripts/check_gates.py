@@ -20,25 +20,29 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+# Import ExitCodes from utils
+from utils import ExitCodes
+
 # Default gate thresholds
 GATES = {
-    "fp_rate_max": 0.15,         # FP rate < 15%
-    "latency_p95_max_ms": 500,   # p95 < 500ms (cache hit)
+    "fp_rate_max": 0.15,  # FP rate < 15%
+    "latency_p95_max_ms": 500,  # p95 < 500ms (cache hit)
     "cache_hit_rate_min": 0.80,  # Cache hit > 80%
-    "schema_stability": True,    # Snapshots match
+    "schema_stability": True,  # Snapshots match
 }
 
 # Degradation policy for CI
 DEGRADATION_POLICY = {
-    "PARTIAL": "warn",    # Log warning, don't fail
-    "DEGRADED": "warn",   # Log warning, don't fail
-    "OFFLINE": "fail",    # Fail the gate
+    "PARTIAL": "warn",  # Log warning, don't fail
+    "DEGRADED": "warn",  # Log warning, don't fail
+    "OFFLINE": "fail",  # Fail the gate
 }
 
 
 @dataclass
 class GateResult:
     """Result of a gate check."""
+
     name: str
     passed: bool
     actual: Any
@@ -161,20 +165,21 @@ def load_results(results_path: Path) -> Dict[str, Any]:
 
     Returns:
         Dictionary with benchmark results.
+
+    Raises:
+        FileNotFoundError: If the results file does not exist.
+        json.JSONDecodeError: If the results file contains invalid JSON.
     """
     if not results_path.exists():
-        print(f"Error: Results file not found: {results_path}", file=sys.stderr)
-        sys.exit(1)
+        raise FileNotFoundError(f"Results file not found: {results_path}")
 
-    try:
-        content = results_path.read_text(encoding="utf-8")
-        return json.loads(content)
-    except json.JSONDecodeError as e:
-        print(f"Error: Invalid JSON in results file: {e}", file=sys.stderr)
-        sys.exit(1)
+    content = results_path.read_text(encoding="utf-8")
+    return json.loads(content)
 
 
-def print_report(results: Dict[str, Any], gate_results: List[GateResult], all_passed: bool) -> None:
+def print_report(
+    results: Dict[str, Any], gate_results: List[GateResult], all_passed: bool
+) -> None:
     """Print gate check report.
 
     Args:
@@ -219,80 +224,94 @@ def main() -> int:
     """Main entry point.
 
     Returns:
-        Exit code (0 for pass, 1 for fail).
+        Exit code from ExitCodes enum.
     """
-    import argparse
+    try:
+        import argparse
 
-    parser = argparse.ArgumentParser(description="Check benchmark gates")
-    parser.add_argument(
-        "results_file",
-        type=Path,
-        help="Path to benchmark results JSON file",
-    )
-    parser.add_argument(
-        "--json",
-        action="store_true",
-        help="Output results as JSON",
-    )
-    parser.add_argument(
-        "--fp-rate-max",
-        type=float,
-        default=GATES["fp_rate_max"],
-        help=f"Maximum FP rate (default: {GATES['fp_rate_max']})",
-    )
-    parser.add_argument(
-        "--latency-p95-max",
-        type=int,
-        default=GATES["latency_p95_max_ms"],
-        help=f"Maximum p95 latency in ms (default: {GATES['latency_p95_max_ms']})",
-    )
-    parser.add_argument(
-        "--cache-hit-rate-min",
-        type=float,
-        default=GATES["cache_hit_rate_min"],
-        help=f"Minimum cache hit rate (default: {GATES['cache_hit_rate_min']})",
-    )
+        parser = argparse.ArgumentParser(description="Check benchmark gates")
+        parser.add_argument(
+            "results_file",
+            type=Path,
+            help="Path to benchmark results JSON file",
+        )
+        parser.add_argument(
+            "--json",
+            action="store_true",
+            help="Output results as JSON",
+        )
+        parser.add_argument(
+            "--fp-rate-max",
+            type=float,
+            default=GATES["fp_rate_max"],
+            help=f"Maximum FP rate (default: {GATES['fp_rate_max']})",
+        )
+        parser.add_argument(
+            "--latency-p95-max",
+            type=int,
+            default=GATES["latency_p95_max_ms"],
+            help=f"Maximum p95 latency in ms (default: {GATES['latency_p95_max_ms']})",
+        )
+        parser.add_argument(
+            "--cache-hit-rate-min",
+            type=float,
+            default=GATES["cache_hit_rate_min"],
+            help=f"Minimum cache hit rate (default: {GATES['cache_hit_rate_min']})",
+        )
 
-    args = parser.parse_args()
+        args = parser.parse_args()
 
-    # Update gates with CLI args
-    GATES["fp_rate_max"] = args.fp_rate_max
-    GATES["latency_p95_max_ms"] = args.latency_p95_max
-    GATES["cache_hit_rate_min"] = args.cache_hit_rate_min
+        # Update gates with CLI args
+        GATES["fp_rate_max"] = args.fp_rate_max
+        GATES["latency_p95_max_ms"] = args.latency_p95_max
+        GATES["cache_hit_rate_min"] = args.cache_hit_rate_min
 
-    # Load results
-    results = load_results(args.results_file)
+        # Load results (may raise FileNotFoundError, json.JSONDecodeError)
+        results = load_results(args.results_file)
 
-    # Check all gates
-    all_passed, gate_results = check_all_gates(results)
+        # Check all gates
+        all_passed, gate_results = check_all_gates(results)
 
-    # Output report
-    if args.json:
-        output = {
-            "passed": all_passed,
-            "gates": [
-                {
-                    "name": g.name,
-                    "passed": g.passed,
-                    "actual": g.actual,
-                    "threshold": g.threshold,
-                    "message": g.message,
-                }
-                for g in gate_results
-            ],
-            "summary": {
-                "total_findings": results.get("total_findings", 0),
-                "fp_rate": results.get("fp_rate", 0.0),
-                "latency_p50_ms": results.get("latency_p50_ms", 0),
-                "latency_p95_ms": results.get("latency_p95_ms", 0),
-                "cache_hit_rate": results.get("cache_hit_rate", 0.0),
-            },
-        }
-        print(json.dumps(output, indent=2))
-    else:
-        print_report(results, gate_results, all_passed)
+        # Output report
+        if args.json:
+            output = {
+                "passed": all_passed,
+                "gates": [
+                    {
+                        "name": g.name,
+                        "passed": g.passed,
+                        "actual": g.actual,
+                        "threshold": g.threshold,
+                        "message": g.message,
+                    }
+                    for g in gate_results
+                ],
+                "summary": {
+                    "total_findings": results.get("total_findings", 0),
+                    "fp_rate": results.get("fp_rate", 0.0),
+                    "latency_p50_ms": results.get("latency_p50_ms", 0),
+                    "latency_p95_ms": results.get("latency_p95_ms", 0),
+                    "cache_hit_rate": results.get("cache_hit_rate", 0.0),
+                },
+            }
+            print(json.dumps(output, indent=2))
+        else:
+            print_report(results, gate_results, all_passed)
 
-    return 0 if all_passed else 1
+        return ExitCodes.SUCCESS if all_passed else ExitCodes.FAILURE
+
+    except SystemExit as e:
+        # Handle argparse-generated exits (e.g., --help)
+        return ExitCodes.INVALID_ARGS
+    except FileNotFoundError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        return ExitCodes.CONFIG_ERROR
+    except (json.JSONDecodeError, ValueError) as e:
+        print(f"Error: Invalid JSON in results file: {e}", file=sys.stderr)
+        return ExitCodes.CONFIG_ERROR
+    except Exception as e:
+        print(f"Error: {e}", file=sys.stderr)
+        return ExitCodes.FAILURE
 
 
 if __name__ == "__main__":

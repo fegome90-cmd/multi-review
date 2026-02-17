@@ -332,12 +332,11 @@ class TestRunTools:
         context.python_config.ruff_rules = ["E501", "F401"]
         return context
 
-    @patch('subprocess.run')
+    @patch("validation_pass.subprocess.run")
     def test_run_tools_for_file_ruff_success(self, mock_run, mock_context):
         """Test _run_tools_for_file with successful ruff execution."""
         mock_run.return_value = Mock(
-            stdout="src/auth.py:10:5: F401 `os` imported but unused",
-            returncode=1
+            stdout="src/auth.py:10:5: F401 `os` imported but unused", returncode=1
         )
 
         validation = ValidationPass(mock_context, ValidationMode.EVIDENCE)
@@ -348,7 +347,7 @@ class TestRunTools:
         assert evidence[0].line == 10
         assert evidence[0].code == "F401"
 
-    @patch('subprocess.run')
+    @patch("validation_pass.subprocess.run")
     def test_run_tools_for_file_ruff_not_found(self, mock_run, mock_context):
         """Test _run_tools_for_file with FileNotFoundError when ruff not installed."""
         mock_run.side_effect = FileNotFoundError("ruff not found")
@@ -359,10 +358,10 @@ class TestRunTools:
         # Should return empty list when ruff not found
         assert evidence == []
 
-    @patch('subprocess.run')
+    @patch("validation_pass.subprocess.run")
     def test_run_tools_for_file_timeout_expired(self, mock_run, mock_context):
         """Test _run_tools_for_file with TimeoutExpired handling."""
-        mock_run.side_effect = subprocess.TimeoutExpired('ruff', 30)
+        mock_run.side_effect = subprocess.TimeoutExpired("ruff", 30)
 
         validation = ValidationPass(mock_context, ValidationMode.EVIDENCE)
         evidence = validation._run_tools("src/auth.py")
@@ -370,12 +369,11 @@ class TestRunTools:
         # Should return empty list when timeout occurs
         assert evidence == []
 
-    @patch('subprocess.run')
+    @patch("validation_pass.subprocess.run")
     def test_run_tools_for_file_mypy_configured(self, mock_run, mock_context):
         """Test _run_tools_for_file runs mypy when mypy_configured=True."""
         mock_run.return_value = Mock(
-            stdout="src/auth.py:10: error: Incompatible types",
-            returncode=1
+            stdout="src/auth.py:10: error: Incompatible types", returncode=1
         )
 
         validation = ValidationPass(mock_context, ValidationMode.EVIDENCE)
@@ -387,12 +385,11 @@ class TestRunTools:
         assert "ruff" in sources
         assert "mypy" in sources
 
-    @patch('subprocess.run')
+    @patch("validation_pass.subprocess.run")
     def test_run_tools_for_file_mypy_not_configured(self, mock_run):
         """Test _run_tools_for_file skips mypy when mypy_configured=False."""
         mock_run.return_value = Mock(
-            stdout="src/auth.py:10:5: F401 `os` imported but unused",
-            returncode=1
+            stdout="src/auth.py:10:5: F401 `os` imported but unused", returncode=1
         )
 
         context = MagicMock()
@@ -422,8 +419,10 @@ class TestLoadCachedEvidence:
         context.shell_config.strict_mode_files = set()
         return context
 
-    @patch('pathlib.Path.exists')
-    def test_load_cached_evidence_returns_empty_when_not_exists(self, mock_exists, mock_context):
+    @patch("pathlib.Path.exists")
+    def test_load_cached_evidence_returns_empty_when_not_exists(
+        self, mock_exists, mock_context
+    ):
         """Test _load_cached_evidence returns empty list when cache doesn't exist."""
         mock_exists.return_value = False
 
@@ -432,9 +431,11 @@ class TestLoadCachedEvidence:
 
         assert evidence == []
 
-    @patch('pathlib.Path.exists')
-    @patch('pathlib.Path.read_text')
-    def test_load_cached_evidence_handles_corrupted_json(self, mock_read, mock_exists, mock_context):
+    @patch("pathlib.Path.exists")
+    @patch("pathlib.Path.read_text")
+    def test_load_cached_evidence_handles_corrupted_json(
+        self, mock_read, mock_exists, mock_context
+    ):
         """Test _load_cached_evidence handles corrupted JSON."""
         mock_exists.return_value = True
         mock_read.return_value = "invalid json {"
@@ -641,7 +642,7 @@ class TestValidateFinding:
         context.shell_config.strict_mode_files = set()
         return context
 
-    @patch.object(ValidationPass, '_get_evidence')
+    @patch.object(ValidationPass, "_get_evidence")
     def test_validate_finding_with_confirmation(self, mock_get_evidence, mock_context):
         """Test validate_finding adds CONFIRMED evidence ref."""
         mock_get_evidence.return_value = [
@@ -674,7 +675,7 @@ class TestValidateFinding:
         # Should have CONFIRMED evidence ref
         assert any(ref.startswith("CONFIRMED:") for ref in validated.evidence_refs)
 
-    @patch.object(ValidationPass, '_get_evidence')
+    @patch.object(ValidationPass, "_get_evidence")
     def test_validate_finding_with_contradiction(self, mock_get_evidence, mock_context):
         """Test validate_finding sets confidence to 0 on contradiction."""
         mock_get_evidence.return_value = []
@@ -699,8 +700,10 @@ class TestValidateFinding:
         assert validated.confidence == 0
         assert any(ref.startswith("CONTRADICTS:") for ref in validated.evidence_refs)
 
-    @patch.object(ValidationPass, '_get_evidence')
-    def test_validate_finding_with_pattern_contradiction(self, mock_get_evidence, mock_context):
+    @patch.object(ValidationPass, "_get_evidence")
+    def test_validate_finding_with_pattern_contradiction(
+        self, mock_get_evidence, mock_context
+    ):
         """Test validate_finding reduces confidence on pattern contradiction."""
         mock_get_evidence.return_value = []
 
@@ -738,7 +741,7 @@ class TestGetValidationSummary:
         context.shell_config.strict_mode_files = set()
         return context
 
-    @patch.object(ValidationPass, '_get_evidence')
+    @patch.object(ValidationPass, "_get_evidence")
     def test_get_validation_summary_confirmed(self, mock_get_evidence, mock_context):
         """Test get_validation_summary with confirmed findings."""
         mock_get_evidence.return_value = [
@@ -774,7 +777,7 @@ class TestGetValidationSummary:
         assert summary["confirmed_by_tools"] == 1
         assert summary["contradicted_by_tools"] == 0
 
-    @patch.object(ValidationPass, '_get_evidence')
+    @patch.object(ValidationPass, "_get_evidence")
     def test_get_validation_summary_contrdicted(self, mock_get_evidence, mock_context):
         """Test get_validation_summary with contradicted findings."""
         mock_get_evidence.return_value = []

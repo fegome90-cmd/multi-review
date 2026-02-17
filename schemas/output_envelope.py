@@ -34,6 +34,7 @@ class DegradationLevel(Enum):
         DEGRADED: Multiple tools unavailable, validation quality reduced.
         OFFLINE: No validation tools available, using fallback logic only.
     """
+
     FULL = "full"
     PARTIAL = "partial"
     DEGRADED = "degraded"
@@ -50,6 +51,7 @@ class ToolStatus(Enum):
         ERROR: Tool crashed or returned unexpected error.
         SKIPPED: Tool not applicable (e.g., mypy on non-Python files).
     """
+
     SUCCESS = "success"
     TIMEOUT = "timeout"
     MISSING = "missing"
@@ -67,6 +69,7 @@ class LatencyMetrics:
         validate_ms: Time for Layer 3 validation (ms).
         total_ms: Total review time (ms).
     """
+
     context_ms: int = 0
     filter_ms: int = 0
     validate_ms: int = 0
@@ -91,6 +94,7 @@ class CacheMetrics:
         misses: Number of cache misses.
         hit_rate: Cache hit rate (0.0 to 1.0).
     """
+
     hits: int = 0
     misses: int = 0
 
@@ -136,6 +140,7 @@ class ReviewEnvelope:
         >>> envelope.to_json()
         '{"schema_version": "1.0.0", ...}'
     """
+
     schema_version: str = "1.0.0"
     review_id: str = ""
     timestamp: str = ""
@@ -199,16 +204,10 @@ class ReviewEnvelope:
             "schema_version": self.schema_version,
             "review_id": self.review_id,
             "timestamp": self.timestamp,
-            "findings": [
-                self._finding_to_dict(f) for f in self.findings
-            ],
-            "suppressed": [
-                self._filtered_finding_to_dict(f) for f in self.suppressed
-            ],
+            "findings": [self._finding_to_dict(f) for f in self.findings],
+            "suppressed": [self._filtered_finding_to_dict(f) for f in self.suppressed],
             "validation_status": self.validation_status.value,
-            "tool_status": {
-                k: v.value for k, v in self.tool_status.items()
-            },
+            "tool_status": {k: v.value for k, v in self.tool_status.items()},
             "latency": self.latency.to_dict(),
             "cache": self.cache.to_dict(),
             "summary": self.summary,
@@ -222,9 +221,12 @@ class ReviewEnvelope:
         """
         try:
             from dataclasses import asdict
+
             result = asdict(finding)
             # Convert frozenset to sorted list for JSON serialization
-            if "evidence_refs" in result and isinstance(result["evidence_refs"], frozenset):
+            if "evidence_refs" in result and isinstance(
+                result["evidence_refs"], frozenset
+            ):
                 result["evidence_refs"] = sorted(result["evidence_refs"])
             return result
         except TypeError:
@@ -259,7 +261,9 @@ class ReviewEnvelope:
                 reason_code_value = str(reason_code)
 
         result = {
-            "action": getattr(filtered, "action", {}).value if hasattr(filtered, "action") else "unknown",
+            "action": getattr(filtered, "action", {}).value
+            if hasattr(filtered, "action")
+            else "unknown",
             "reason": getattr(filtered, "reason", ""),
             "filtered_confidence": getattr(filtered, "filtered_confidence", 0),
             "reason_code": reason_code_value,
@@ -291,14 +295,26 @@ class ReviewEnvelope:
             ReviewEnvelope instance.
         """
         # Import here to avoid circular dependency
-        from finding_filter import Finding, FilteredFinding, FilterAction
+        # Add scripts directory to path for reliable imports
+        import sys
+        from pathlib import Path
+
+        sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
+        from finding_filter import (
+            Finding,
+            FilteredFinding,
+            FilterAction,
+            SuppressionReasonCode,
+        )
 
         # Parse findings
         findings = []
         for f_data in data.get("findings", []):
             if isinstance(f_data, dict):
                 # Convert evidence_refs back to frozenset if needed
-                if "evidence_refs" in f_data and isinstance(f_data["evidence_refs"], list):
+                if "evidence_refs" in f_data and isinstance(
+                    f_data["evidence_refs"], list
+                ):
                     f_data["evidence_refs"] = frozenset(f_data["evidence_refs"])
                 findings.append(Finding(**f_data))
 
@@ -307,15 +323,37 @@ class ReviewEnvelope:
         for s_data in data.get("suppressed", []):
             if isinstance(s_data, dict):
                 finding_data = s_data.get("finding", {})
-                if "evidence_refs" in finding_data and isinstance(finding_data["evidence_refs"], list):
-                    finding_data["evidence_refs"] = frozenset(finding_data["evidence_refs"])
+                if "evidence_refs" in finding_data and isinstance(
+                    finding_data["evidence_refs"], list
+                ):
+                    finding_data["evidence_refs"] = frozenset(
+                        finding_data["evidence_refs"]
+                    )
 
-                suppressed.append(FilteredFinding(
-                    finding=Finding(**finding_data) if finding_data else None,
-                    action=FilterAction(s_data.get("action", "set_confidence")),
-                    reason=s_data.get("reason", ""),
-                    filtered_confidence=s_data.get("filtered_confidence", 0),
-                ))
+                # Reconstruct reason_code enum if present
+                reason_code = None
+                if s_data.get("reason_code") is not None:
+                    reason_code_value = s_data["reason_code"]
+                    # Handle both string and enum value formats
+                    if isinstance(reason_code_value, str):
+                        try:
+                            reason_code = SuppressionReasonCode(reason_code_value)
+                        except ValueError:
+                            # If not a valid enum, store as-is (will be handled by caller)
+                            reason_code = reason_code_value
+                    else:
+                        reason_code = reason_code_value
+
+                suppressed.append(
+                    FilteredFinding(
+                        finding=Finding(**finding_data) if finding_data else None,
+                        action=FilterAction(s_data.get("action", "set_confidence")),
+                        reason=s_data.get("reason", ""),
+                        filtered_confidence=s_data.get("filtered_confidence", 0),
+                        reason_code=reason_code,
+                        filter_rule_id=s_data.get("filter_rule_id"),
+                    )
+                )
 
         # Parse tool status
         tool_status = {}
