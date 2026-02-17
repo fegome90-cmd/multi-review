@@ -778,7 +778,7 @@ class TestGetValidationSummary:
         assert summary["contradicted_by_tools"] == 0
 
     @patch.object(ValidationPass, "_get_evidence")
-    def test_get_validation_summary_contrdicted(self, mock_get_evidence, mock_context):
+    def test_get_validation_summary_contradicted(self, mock_get_evidence, mock_context):
         """Test get_validation_summary with contradicted findings."""
         mock_get_evidence.return_value = []
 
