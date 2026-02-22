@@ -42,7 +42,6 @@ class ExitCodes:
     INVALID_ARGS = 2
     CONFIG_ERROR = 3
     ERROR = 4
-    CONFIG_ERROR = 3
 
 
 # Legacy exit code constants (deprecated, use ExitCodes class instead)

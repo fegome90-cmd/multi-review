@@ -329,6 +329,9 @@ def classify_finding(
 ) -> Classification:
     """Classify a finding based on expected labels.
 
+    This is a convenience wrapper around classify_finding_with_details()
+    that returns only the classification value.
+
     Args:
         finding: The finding to classify.
         labels: List of expected labels to match against.
@@ -350,31 +353,10 @@ def classify_finding(
         >>> classify_finding(finding, labels, is_suppressed=True)
         Classification.SUPPRESSED
     """
-    config = config or MatcherConfig()
-
-    for label in labels:
-        if match_finding_to_label(finding, label, config):
-            expected = label.expected
-
-            if expected == Classification.SUPPRESSED:
-                if is_suppressed:
-                    if label.reason_code and actual_reason_code:
-                        if label.reason_code.lower() != actual_reason_code.lower():
-                            continue
-                    return Classification.SUPPRESSED
-                return Classification.FP
-
-            if expected == Classification.TP:
-                if not is_suppressed:
-                    return Classification.TP
-                return Classification.FP
-
-            if expected == Classification.FP:
-                return Classification.FP
-
-            return expected
-
-    return Classification.UNLABELED
+    result = classify_finding_with_details(
+        finding, labels, config, is_suppressed, actual_reason_code
+    )
+    return result["classification"]
 
 
 def classify_finding_with_details(
