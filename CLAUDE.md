@@ -60,7 +60,12 @@ See `resources/hook-format.md` for specification.
 
 ### Python Scripts
 - Use `logging.basicConfig(level=logging.INFO)` - stdlib only
-- Exit codes: 0=success, 1=issues, 2=error
+- **Exit codes** (use `utils.ExitCodes` class):
+  - `ExitCodes.SUCCESS` (0): Normal successful execution
+  - `ExitCodes.FAILURE` (1): General failure or issues found
+  - `ExitCodes.INVALID_ARGS` (2): Invalid command-line arguments
+  - `ExitCodes.CONFIG_ERROR` (3): Configuration or setup error
+  - `ExitCodes.ERROR` (4): Runtime/operational error
 - Comprehensive try/except with actionable messages
 
 #### scripts/utils.py
@@ -74,6 +79,7 @@ Canonical exit code constants for all scripts:
 - `ExitCodes.FAILURE` (1): General failure or issues found
 - `ExitCodes.INVALID_ARGS` (2): Invalid command-line arguments
 - `ExitCodes.CONFIG_ERROR` (3): Configuration or setup error
+- `ExitCodes.ERROR` (4): Runtime/operational error
 
 Legacy constants (deprecated, use ExitCodes class instead):
 - `EXIT_SUCCESS`, `EXIT_ISSUES_FOUND`, `EXIT_ERROR`, `EXIT_TYPE_ERRORS`

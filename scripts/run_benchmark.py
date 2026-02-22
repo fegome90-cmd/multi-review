@@ -722,6 +722,127 @@ def run_all_benchmarks(
 
 
 # =============================================================================
+# OUTPUT HELPERS (for main() refactoring)
+# =============================================================================
+
+
+@dataclass
+class AggregatedTotals:
+    """Aggregated totals from benchmark results.
+
+    Attributes:
+        fixtures_run: Number of fixtures executed.
+        total_findings: Total findings across all fixtures.
+        true_positives: Total true positives.
+        false_positives: Total false positives.
+        suppressed: Total suppressed findings.
+        unlabeled: Total unlabeled findings.
+    """
+
+    fixtures_run: int
+    total_findings: int
+    true_positives: int
+    false_positives: int
+    suppressed: int
+    unlabeled: int
+
+
+def _aggregate_results(results: Dict[str, BenchmarkResult]) -> AggregatedTotals:
+    """Aggregate results from multiple benchmark runs.
+
+    Args:
+        results: Dictionary mapping fixture name to BenchmarkResult.
+
+    Returns:
+        AggregatedTotals with summed values.
+    """
+    all_results = list(results.values())
+    return AggregatedTotals(
+        fixtures_run=len(results),
+        total_findings=sum(r.total_findings for r in all_results),
+        true_positives=sum(r.true_positives for r in all_results),
+        false_positives=sum(r.false_positives for r in all_results),
+        suppressed=sum(r.suppressed for r in all_results),
+        unlabeled=sum(r.unlabeled for r in all_results),
+    )
+
+
+def _output_text_summary(
+    results: Dict[str, BenchmarkResult],
+    totals: AggregatedTotals,
+    verbose: bool = False,
+) -> None:
+    """Output text summary to stdout.
+
+    Args:
+        results: Dictionary mapping fixture name to BenchmarkResult.
+        totals: Aggregated totals.
+        verbose: Include detailed per-fixture output.
+    """
+    print("\n" + "=" * 60)
+    print("BENCHMARK SUMMARY")
+    print("=" * 60)
+    print(f"\nFixtures Run: {totals.fixtures_run}")
+    print(f"Total Findings: {totals.total_findings}")
+    print(f"  True Positives:  {totals.true_positives}")
+    print(f"  False Positives: {totals.false_positives}")
+    print(f"  Suppressed:      {totals.suppressed}")
+    print(f"  Unlabeled:       {totals.unlabeled}")
+
+    for result in results.values():
+        print(format_result_text(result, verbose))
+
+
+def _output_json_summary(
+    results: Dict[str, BenchmarkResult],
+    totals: AggregatedTotals,
+    output_file: Optional[Path] = None,
+    output_format: str = "json",
+) -> None:
+    """Output JSON summary to file or stdout.
+
+    Args:
+        results: Dictionary mapping fixture name to BenchmarkResult.
+        totals: Aggregated totals.
+        output_file: Optional path to write JSON file.
+        output_format: 'json' or 'both' (controls stdout behavior).
+    """
+    output_data = {
+        "summary": {
+            "fixtures_run": totals.fixtures_run,
+            "total_findings": totals.total_findings,
+            "true_positives": totals.true_positives,
+            "false_positives": totals.false_positives,
+            "suppressed": totals.suppressed,
+            "unlabeled": totals.unlabeled,
+        },
+        "results": {name: r.to_dict() for name, r in results.items()},
+    }
+    json_output = json.dumps(output_data, indent=2)
+
+    if output_file:
+        output_file.write_text(json_output)
+        print(f"JSON output written to: {output_file}")
+    elif output_format == "json":
+        print(json_output)
+
+
+def _get_exit_code(totals: AggregatedTotals, fail_on_unlabeled: bool) -> int:
+    """Determine exit code based on results.
+
+    Args:
+        totals: Aggregated totals.
+        fail_on_unlabeled: Whether to fail on unlabeled findings.
+
+    Returns:
+        Exit code (ExitCodes.SUCCESS or ExitCodes.FAILURE).
+    """
+    if fail_on_unlabeled and totals.unlabeled > 0:
+        return ExitCodes.FAILURE
+    return ExitCodes.SUCCESS
+
+
+# =============================================================================
 # CLI
 # =============================================================================
 
@@ -805,113 +926,25 @@ def main():
                 logger.info(f"Running benchmark: {fixture_name}")
                 result = run_benchmark(fixture_dir, config)
                 results[fixture_name] = result
-
-            if not results:
-                print("No benchmarks found")
-                return ExitCodes.FAILURE
-
-            # Aggregate results
-            all_results = list(results.values())
-            total_findings = sum(r.total_findings for r in all_results)
-            total_tp = sum(r.true_positives for r in all_results)
-            total_fp = sum(r.false_positives for r in all_results)
-            total_suppressed = sum(r.suppressed for r in all_results)
-            total_unlabeled = sum(r.unlabeled for r in all_results)
-
-            if args.output in ("text", "both"):
-                print("\n" + "=" * 60)
-                print("BENCHMARK SUMMARY")
-                print("=" * 60)
-                print(f"\nFixtures Run: {len(results)}")
-                print(f"Total Findings: {total_findings}")
-                print(f"  True Positives:  {total_tp}")
-                print(f"  False Positives: {total_fp}")
-                print(f"  Suppressed:      {total_suppressed}")
-                print(f"  Unlabeled:       {total_unlabeled}")
-                for _name, result in results.items():
-                    print(format_result_text(result, args.verbose))
-
-            if args.output in ("json", "both"):
-                output_data = {
-                    "summary": {
-                        "fixtures_run": len(results),
-                        "total_findings": total_findings,
-                        "true_positives": total_tp,
-                        "false_positives": total_fp,
-                        "suppressed": total_suppressed,
-                        "unlabeled": total_unlabeled,
-                    },
-                    "results": {name: r.to_dict() for name, r in results.items()},
-                }
-                json_output = json.dumps(output_data, indent=2)
-                if args.output_file:
-                    args.output_file.write_text(json_output)
-                    print(f"JSON output written to: {args.output_file}")
-                elif args.output == "json":
-                    print(json_output)
-
-            if args.fail_on_unlabeled and total_unlabeled > 0:
-                return ExitCodes.FAILURE
-            return ExitCodes.SUCCESS
-
         else:
             # Run all benchmarks
             results = run_all_benchmarks(benchmarks_dir, config)
 
-            if not results:
-                print("No benchmarks found")
-                return ExitCodes.FAILURE
+        # Handle empty results
+        if not results:
+            print("No benchmarks found")
+            return ExitCodes.FAILURE
 
-            # Aggregate results
-            all_results = list(results.values())
+        # Aggregate and output results
+        totals = _aggregate_results(results)
 
-            # Summary
-            total_findings = sum(r.total_findings for r in all_results)
-            total_tp = sum(r.true_positives for r in all_results)
-            total_fp = sum(r.false_positives for r in all_results)
-            total_suppressed = sum(r.suppressed for r in all_results)
-            total_unlabeled = sum(r.unlabeled for r in all_results)
+        if args.output in ("text", "both"):
+            _output_text_summary(results, totals, args.verbose)
 
-            if args.output in ("text", "both"):
-                print("\n" + "=" * 60)
-                print("BENCHMARK SUMMARY")
-                print("=" * 60)
-                print(f"\nFixtures Run: {len(results)}")
-                print(f"Total Findings: {total_findings}")
-                print(f"  True Positives:  {total_tp}")
-                print(f"  False Positives: {total_fp}")
-                print(f"  Suppressed:      {total_suppressed}")
-                print(f"  Unlabeled:       {total_unlabeled}")
+        if args.output in ("json", "both"):
+            _output_json_summary(results, totals, args.output_file, args.output)
 
-                # Per-fixture results
-                for name, result in results.items():
-                    print(format_result_text(result, args.verbose))
-
-            if args.output in ("json", "both"):
-                output_data = {
-                    "summary": {
-                        "fixtures_run": len(results),
-                        "total_findings": total_findings,
-                        "true_positives": total_tp,
-                        "false_positives": total_fp,
-                        "suppressed": total_suppressed,
-                        "unlabeled": total_unlabeled,
-                    },
-                    "results": {name: r.to_dict() for name, r in results.items()},
-                }
-                json_output = json.dumps(output_data, indent=2)
-
-                if args.output_file:
-                    args.output_file.write_text(json_output)
-                    print(f"JSON output written to: {args.output_file}")
-                elif args.output == "json":
-                    print(json_output)
-
-            # Exit code - let check_gates.py handle FP threshold, not here
-            if args.fail_on_unlabeled and total_unlabeled > 0:
-                return ExitCodes.FAILURE
-
-            return ExitCodes.SUCCESS
+        return _get_exit_code(totals, args.fail_on_unlabeled)
 
     except SystemExit as e:
         if e.code == 0:
