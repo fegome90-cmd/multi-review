@@ -1,7 +1,7 @@
 ---
 description: Evaluate implementation plans with multi-agent analysis
 argument-hint: [--file PATH | --plan-text "text"] [--preset=quick|thorough|comprehensive] [--workflow=feature|bugfix|refactor|security]
-allowed-tools: ["Task", "AskUserQuestion"]
+allowed-tools: Task,AskUserQuestion,Read,Glob,Grep
 ---
 
 # /mr-plan
