@@ -23,7 +23,7 @@ Invoke the **mr-plan-evaluator** agent to analyze implementation plans.
 
 **BEFORE invoking agent, validate file path if `--file` is provided:**
 
-```
+```text
 IF --file is provided:
     path = value of --file
 
@@ -57,7 +57,7 @@ IF --file is provided:
 
 Invoke the mr-plan-evaluator agent with the validated context:
 
-```
+```text
 Task: multi-review:mr-plan-evaluator
 
 Context to pass:
@@ -152,7 +152,7 @@ This command enforces:
 - ✅ Path traversal prevention (no `..` in paths)
 - ✅ No absolute paths (must be relative to workspace)
 - ✅ Sensitive directory protection (.claude/, .env/, .ssh/, .git/)
-- ✅ Minimal tool access (Task + AskUserQuestion only)
+- ✅ Minimal tool access (Task, AskUserQuestion, Read, Glob, Grep)
 
 The agent additionally enforces:
 - ✅ Prompt injection detection and sanitization

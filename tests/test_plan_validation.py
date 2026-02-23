@@ -9,7 +9,7 @@ These tests cover:
 
 import copy
 import pytest
-from typing import Any
+from typing import Any, ClassVar
 
 from plan_validation import (
     detects_injection,
@@ -188,7 +188,7 @@ class TestEmptyFileValidation:
             "  \n  \t  \n  ",
         ]
         for content in whitespace_contents:
-            assert is_empty_content(content), f"Whitespace-only file not detected"
+            assert is_empty_content(content), "Whitespace-only file not detected"
 
     def test_rejects_binary_file(self) -> None:
         """Binary files should be rejected."""
@@ -205,7 +205,7 @@ class TestEmptyFileValidation:
         ]
         for content in valid_contents:
             assert not is_empty_content(content), f"Valid content rejected: {content[:20]}..."
-            assert not is_binary_content(content), f"Valid content flagged as binary"
+            assert not is_binary_content(content), "Valid content flagged as binary"
 
 
 # ============================================================================
@@ -215,7 +215,7 @@ class TestEmptyFileValidation:
 class TestSubagentJsonValidation:
     """Tests for subagent response schema validation."""
 
-    VALID_RESPONSE: dict[str, Any] = {
+    VALID_RESPONSE: ClassVar[dict[str, Any]] = {
         "agent": "code-reviewer",
         "analysis_type": "structure",
         "findings": [

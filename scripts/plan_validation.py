@@ -57,9 +57,8 @@ def is_invalid_path(path: str) -> bool:
 
 def detects_injection(content: str) -> bool:
     """Return True if *content* contains prompt injection patterns."""
-    content_lower = content.lower()
     for pattern in INJECTION_PATTERNS:
-        if re.search(pattern, content_lower, re.IGNORECASE):
+        if re.search(pattern, content, re.IGNORECASE):
             return True
     return False
 
@@ -149,17 +148,27 @@ def normalize_response(response: dict[str, Any]) -> dict[str, Any]:
         for finding in response["findings"]:
             norm_finding = finding.copy()
             if "severity" in norm_finding:
-                norm_finding["severity"] = norm_finding["severity"].upper()
+                sev = norm_finding["severity"]
+                if isinstance(sev, str):
+                    norm_finding["severity"] = sev.upper()
+                else:
+                    norm_finding["severity"] = "UNKNOWN"
             normalized["findings"].append(norm_finding)
 
     if "confidence" in normalized:
-        conf = normalized["confidence"]
-        normalized["confidence"] = max(0.0, min(1.0, float(conf)))
+        try:
+            conf = float(normalized["confidence"])
+        except (ValueError, TypeError):
+            conf = 0.0
+        normalized["confidence"] = max(0.0, min(1.0, conf))
 
     if "summary" in normalized:
         normalized["summary"] = {}
         for key in SUMMARY_FIELDS:
             val = response["summary"].get(key, 0)
-            normalized["summary"][key] = int(val)
+            try:
+                normalized["summary"][key] = int(val)
+            except (ValueError, TypeError):
+                normalized["summary"][key] = 0
 
     return normalized
