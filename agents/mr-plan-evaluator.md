@@ -411,7 +411,7 @@ Use AskUserQuestion to let user choose.
    - Create synthetic finding:
      ```json
      {
-       "id": "PARSE-001",
+       "id": "F-000",
        "severity": "MEDIUM",
        "category": "subagent_failure",
        "message": "{agent_name} returned unparseable response",

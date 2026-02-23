@@ -106,6 +106,8 @@ def validate_response(response: dict[str, Any]) -> list[str]:
 
     if "summary" not in response:
         errors.append("Missing 'summary' field")
+    elif not isinstance(response["summary"], dict):
+        errors.append("'summary' must be an object")
     else:
         for field in SUMMARY_FIELDS:
             if field not in response["summary"]:
@@ -164,8 +166,9 @@ def normalize_response(response: dict[str, Any]) -> dict[str, Any]:
 
     if "summary" in normalized:
         normalized["summary"] = {}
+        summary = response.get("summary") or {}
         for key in SUMMARY_FIELDS:
-            val = response["summary"].get(key, 0)
+            val = summary.get(key, 0)
             try:
                 normalized["summary"][key] = int(val)
             except (ValueError, TypeError):

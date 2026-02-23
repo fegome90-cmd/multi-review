@@ -106,9 +106,9 @@ See `resources/preset-definitions.md` for agent assignments.
 
 | Preset | Time |
 |--------|------|
-| quick | ~30s |
-| thorough | ~2min |
-| comprehensive | ~5min |
+| quick | ~90s |
+| thorough | ~5min |
+| comprehensive | ~10min |
 
 **Default:** thorough
 
