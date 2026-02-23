@@ -1,161 +1,192 @@
 ---
-description: Plan and execute features with multi-agent orchestration
-allowed-tools: Skill, Task, TaskOutput, AskUserQuestion, Bash, Read, Write, Edit
+description: Evaluate implementation plans with multi-agent analysis
+argument-hint: [--file PATH | --plan-text "text"] [--preset=quick|thorough|comprehensive] [--workflow=feature|bugfix|refactor|security]
+allowed-tools: Task,AskUserQuestion,Read,Glob,Grep
 ---
 
-# Multi-Agent Planning & Execution (mr-plan)
+# /mr-plan
 
-Plan and implement features using the everything-claude-code orchestration workflow.
+Invoke the **mr-plan-evaluator** agent to analyze implementation plans.
 
 ## Variables
 
-- `--workflow`: Workflow type (feature|bugfix|refactor|security). Default: feature
-- `--skip-verification`: Skip final verification loop
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `--file` | - | Plan file path (YAML/Markdown) - RELATIVE to workspace |
+| `--plan-text` | - | Plan description as text |
+| `--preset` | thorough | Evaluation depth: quick (2), thorough (4), comprehensive (7) |
+| `--workflow` | feature | Plan type: feature, bugfix, refactor, security |
 
 ## Instructions
 
-This command orchestrates planning and execution using everything-claude-code skills, optimized for GLM-5's rate limits (~60 RPM).
+### Step 1: Input Validation (Zero-Trust)
 
-### Workflow Overview
+**BEFORE invoking agent, validate file path if `--file` is provided:**
 
-```
-plan → orchestrate → [optional] verification-loop
-```
+```text
+IF --file is provided:
+    path = value of --file
 
-**API Efficiency:** 4-5 agent calls total (vs 30+ with superpowers approach)
+    # Path Traversal Check
+    IF path contains "..":
+        STOP and show error: "Path traversal detected. Use relative path without .."
+        DO NOT proceed
 
-### Step 1: Requirements Gathering
+    IF path starts with "/" OR path starts with "~":
+        STOP and show error: "Absolute paths not allowed. Use relative path from workspace root."
+        DO NOT proceed
 
-Ask the user to describe what they want to build:
+    # Sensitive Directory Check
+    IF path contains ".claude/" OR path contains ".env" OR path contains ".ssh/" OR path contains ".git/":
+        STOP and show error: "Access denied: Cannot access sensitive directories"
+        DO NOT proceed
 
-```
-What feature or change would you like to plan and implement?
-```
-
-Wait for their response before proceeding.
-
-### Step 2: Invoke Planning Skill
-
-```bash
-# This creates a detailed implementation plan
-/everything-claude-code:plan
+    # Valid path - proceed to Step 2
 ```
 
-The planner agent will:
-1. Restate requirements in clear terms
-2. Identify risks and blockers
-3. Break down into implementation phases
-4. Wait for user confirmation
+### Step 1.5: Pre-flight Check
 
-**IMPORTANT:** Do NOT proceed to Step 3 until the user explicitly approves the plan.
+**BEFORE invoking agent:**
+1. Verify multi-review plugin is installed
+2. Verify mr-plan-evaluator agent is available
+3. IF either missing:
+   STOP with error: "❌ **Error:** mr-plan-evaluator not found.
+   Install with: /plugin install multi-review@local"
 
-### Step 3: Execute with Orchestration
+### Step 2: Invoke Agent
 
-Once the plan is approved:
+Invoke the mr-plan-evaluator agent with the validated context:
 
-```bash
-# Execute the plan with TDD workflow
-/everything-claude-code:orchestrate
+```text
+Task: multi-review:mr-plan-evaluator
+
+Context to pass:
+- file: {validated --file value or null}
+- plan_text: {--plan-text value or null}
+- preset: {--preset value, default: thorough}
+- workflow: {--workflow value, default: feature}
 ```
 
-The orchestrate skill will:
-1. Run tdd-guide agent for implementation
-2. Run code-reviewer agent for quality check
-3. Optionally run security-reviewer (parallel)
+### Step 3: Delegate to Agent
 
-### Step 4: Verification Loop (Optional)
+**DO NOT:**
+- ❌ Evaluate the plan yourself
+- ❌ Write or modify any files
+- ❌ Execute shell commands
+- ❌ Read files directly (let agent handle)
+- ❌ Bypass the agent
 
-For complex features, run additional verification:
+**The agent handles:**
+1. Loading and sanitizing plan content
+2. Dispatching appropriate subagents based on preset
+3. Aggregating findings into structured report
+4. Presenting evaluation with recommendations
+5. Offering next steps
 
-```bash
-# 6-phase verification if --skip-verification is NOT set
-/everything-claude-code:verification-loop
-```
+**Your only job:**
+1. Validate input (Step 1)
+2. Invoke agent (Step 2)
+3. Let the agent do the work
 
-Verification phases:
-1. Type checking
-2. Linting
-3. Unit tests
-4. Integration tests
-5. Build verification
-6. Manual checklist
+### Step 4: Handle Agent Response
 
-### Step 5: Summary and Next Steps
+**IF agent response contains "Error:" or is empty:**
+1. Report: "❌ **Agent Error:** {error_message}"
+2. Suggest: "Run /mr-doctor to diagnose plugin issues"
 
-Present a summary of what was completed:
+**IF agent response indicates incomplete analysis:**
+1. Report: "⚠️ **Partial Results:** {reason}"
+2. Offer: "Retry?" or "View partial results?"
 
-```markdown
-## Implementation Complete
+---
 
-**Workflow:** {workflow_type}
-**Phases Completed:**
-- [x] Planning
-- [x] Orchestration
-- [x] Verification (if applicable)
+## Presets
 
-**Files Modified:** {count} files
-**Tests Added:** {count} tests
+See `resources/preset-definitions.md` for agent assignments.
 
-### Next Steps
-- Run `/mr-quick` to review the changes
-- Commit with `/commit` when ready
-- Or continue with additional changes
-```
+| Preset | Time |
+|--------|------|
+| quick | ~90s |
+| thorough | ~5min |
+| comprehensive | ~10min |
+
+**Default:** thorough
+
+---
 
 ## Workflow Types
 
-| Type | Description | Agents Used |
-|------|-------------|-------------|
-| `feature` | New feature development | planner → tdd-guide → code-reviewer |
-| `bugfix` | Bug fixes | planner → tdd-guide → code-reviewer |
-| `refactor` | Code refactoring | planner → tdd-guide → code-reviewer |
-| `security` | Security-focused changes | planner → tdd-guide → security-reviewer |
+| Workflow | Focus Adjustment |
+|----------|-----------------|
+| `feature` | Balanced evaluation |
+| `bugfix` | Risk-focused, regression check |
+| `refactor` | Simplification-focused |
+| `security` | Always includes security-reviewer |
 
-## Usage Examples
+---
+
+## Usage
 
 ```bash
-# Plan and implement a new feature (interactive)
+# Evaluate a plan file (thorough preset)
+/mr-plan --file _ctx/plans/PLAN-2026-0001/plan-tree.yaml
+
+# Quick evaluation
+/mr-plan --file docs/plans/feature.md --preset quick
+
+# From text description
+/mr-plan --plan-text "Implement OAuth with Google and GitHub"
+
+# Comprehensive security evaluation
+/mr-plan --file security-plan.yaml --preset comprehensive --workflow security
+
+# Interactive (no args - agent will ask)
 /mr-plan
-
-# Bug fix workflow
-/mr-plan --workflow bugfix
-
-# Security-focused changes
-/mr-plan --workflow security
-
-# Skip verification for faster iteration
-/mr-plan --skip-verification
 ```
 
-## Rate Limit Considerations
+---
 
-This workflow is optimized for GLM-5's ~60 RPM limit:
+## Security
 
-| Phase | API Calls | Cumulative |
-|-------|-----------|------------|
-| Planning | 1 | 1 |
-| Orchestration | 2-3 | 3-4 |
-| Verification | 1-2 | 4-6 |
+This command enforces:
+- ✅ Path traversal prevention (no `..` in paths)
+- ✅ No absolute paths (must be relative to workspace)
+- ✅ Sensitive directory protection (.claude/, .env/, .ssh/, .git/)
+- ✅ Minimal tool access (Task, AskUserQuestion, Read, Glob, Grep)
 
-**Total:** 4-6 calls over several minutes (well under 60 RPM)
+The agent additionally enforces:
+- ✅ Prompt injection detection and sanitization
+- ✅ JSON schema validation for subagent outputs
+- ✅ Read-only operation (no Write, Edit, Bash)
+
+---
 
 ## When to Use
 
-- Starting a new feature
-- Complex refactoring
-- Security-sensitive changes
-- Multi-file modifications
-- When you need structured planning before coding
+- Before executing a complex plan
+- After creating a plan with /plan-orch
+- When reviewing someone else's plan
+- Before PRs with significant changes
+- To identify simplification opportunities
 
 ## When NOT to Use
 
-- Single-file quick fixes → use direct editing
-- Simple typos or config changes
-- When you already have a clear plan
+- Simple, obvious changes
+- Plans you've already evaluated
+- Quick iterations (use /mr-quick on code instead)
+
+---
 
 ## See Also
 
+**Plan Creation:**
+- `/plan-orch` - Create enterprise plans (enterprise-planning plugin)
+
+**Code Review:**
 - `/mr-quick` - 2-agent fast review
 - `/mr-thorough` - 4-agent balanced review
 - `/mr-comprehensive` - 7-agent complete review
+- `/multi-review` - Interactive review selection
+
+**Diagnostics:**
 - `/mr-doctor` - Plugin diagnostics
