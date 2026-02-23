@@ -162,7 +162,6 @@ ELSE:
   - `docs/plans/*.md`
   - `plans/*.md` or `plans/*.yaml`
   - `_ctx/plans/**/*.yaml` (enterprise-planning format)
-  - `.claude/plans/*.md`
 
 - Use Glob to find plan files
 - IF multiple plans found: Present list to user for selection
@@ -270,7 +269,7 @@ Then Batch 2 (parallel):
 Batches 1-2 same as thorough, then Batch 3:
 5. `pr-review-toolkit:pr-test-analyzer` - Test coverage
 6. `pr-review-toolkit:comment-analyzer` - Documentation
-7. `everything-claude-code:security-reviewer` - Security (if workflow=security)
+7. `everything-claude-code:security-reviewer` - Security
 
 **Subagent Prompt Template:**
 
@@ -392,7 +391,11 @@ Use AskUserQuestion to let user choose.
 
 ## Workflow Adjustments
 
-**Rule:** When `--workflow security`, always include `everything-claude-code:security-reviewer` regardless of preset.
+**Rule:** When `--workflow security`, always include `everything-claude-code:security-reviewer`.
+
+- **quick + security:** 3 agents (security-reviewer added to the 2-agent batch; total ~105s)
+- **thorough + security:** 5 agents (security-reviewer added to Batch 2; total ~360s)
+- **comprehensive:** security-reviewer is always included in Batch 3 (no change to counts or timeouts)
 
 ---
 
